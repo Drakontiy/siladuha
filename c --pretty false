@@ -1,0 +1,21 @@
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'env.example', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'miniapp/public/index.html', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'miniapp/src/App.css', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'package-lock.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'package.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/bot.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/index.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/server.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'webpack.config.js', LF will be replaced by CRLF the next time Git touches it
+ README.md                        |   25 [32m+[m[31m-[m
+ env.example                      |   10 [32m+[m[31m-[m
+ miniapp/src/App.css              |   60 [32m+[m[31m-[m
+ miniapp/src/App.tsx              |   44 [32m+[m[31m-[m
+ miniapp/src/telegram-webapp.d.ts |   28 [31m-[m
+ package-lock.json                | 1440 [32m+++++++[m[31m-------------------------------[m
+ package.json                     |    9 [32m+[m[31m-[m
+ src/bot.ts                       |  168 [32m++[m[31m---[m
+ src/server.ts                    |    5 [32m+[m[31m-[m
+ webpack.config.js                |   25 [32m+[m[31m-[m
+ 10 files changed, 440 insertions(+), 1374 deletions(-)

@@ -1,5 +1,6 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 module.exports = (env, argv) => {
   const isProduction = argv.mode === 'production';
@@ -33,11 +34,27 @@ module.exports = (env, argv) => {
         template: './miniapp/public/index.html',
         filename: 'index.html',
       }),
+      new CopyWebpackPlugin({
+        patterns: [
+          {
+            from: path.resolve(__dirname, 'media'),
+            to: path.resolve(__dirname, 'miniapp/dist/media'),
+            noErrorOnMissing: true,
+          },
+        ],
+      }),
     ],
     devServer: {
-      static: {
-        directory: path.join(__dirname, 'miniapp/dist'),
-      },
+      static: [
+        {
+          directory: path.join(__dirname, 'miniapp/dist'),
+          publicPath: '/',
+        },
+        {
+          directory: path.join(__dirname, 'media'),
+          publicPath: '/media',
+        },
+      ],
       port: 3000,
       hot: true,
       open: false,
@@ -45,7 +62,7 @@ module.exports = (env, argv) => {
       allowedHosts: 'all', // Разрешаем все хосты для работы через прокси/туннель
       client: {
         webSocketURL: 'auto://0.0.0.0:0/ws'
-      }
+      },
     },
     devtool: isProduction ? 'source-map' : 'eval-source-map',
   };

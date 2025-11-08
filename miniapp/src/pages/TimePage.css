@@ -1,0 +1,193 @@
+.time-page {
+  padding: 15px;
+  height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.date-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 15px;
+  padding: 10px 0;
+  flex-shrink: 0;
+}
+
+.date-arrow {
+  background: none;
+  border: none;
+  color: #52D1EF;
+  font-size: 24px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 12px;
+  transition: opacity 0.2s;
+  user-select: none;
+}
+
+.date-arrow:hover {
+  opacity: 0.7;
+}
+
+.date-arrow:active {
+  opacity: 0.5;
+}
+
+.date-display {
+  font-size: 24px;
+  font-weight: 600;
+  color: #52D1EF;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Inter', 'SF UI Display', sans-serif;
+  letter-spacing: 0.5px;
+}
+
+.work-start-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 24px;
+  flex-shrink: 0;
+}
+
+.work-start-button {
+  width: 170px;
+  height: 170px;
+  border-radius: 85px;
+  background: linear-gradient(180deg, #82EF52 0%, #58C82A 100%);
+  color: #ffffff;
+  border: none;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  box-shadow: 0 18px 36px rgba(88, 200, 42, 0.35);
+  transition: transform 0.2s, box-shadow 0.2s, background 0.3s;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
+.work-start-button.work-start-button--active {
+  background: linear-gradient(180deg, #EF5252 0%, #D62828 100%);
+  box-shadow: 0 18px 36px rgba(239, 82, 82, 0.35);
+}
+
+.work-start-button:hover {
+  box-shadow: 0 12px 26px rgba(88, 200, 42, 0.45);
+}
+
+.work-start-button.work-start-button--active:hover {
+  box-shadow: 0 12px 26px rgba(239, 82, 82, 0.45);
+}
+
+.work-start-button:active {
+  transform: scale(0.97);
+}
+
+.work-start-button:disabled {
+  cursor: default;
+  opacity: 0.6;
+  box-shadow: none;
+}
+
+.work-start-button__countdown {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.work-start-button__caption {
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.timer-countdown {
+  margin-top: 18px;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  font-size: 16px;
+  color: #0D3A5F;
+  font-weight: 500;
+}
+
+.timer-countdown__value {
+  font-weight: 700;
+}
+
+.timer-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1500;
+}
+
+.timer-modal-content {
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 24px 28px;
+  text-align: center;
+  width: 280px;
+  box-shadow: 0 18px 38px rgba(13, 58, 95, 0.2);
+}
+
+.timer-modal-content p {
+  margin: 0 0 18px 0;
+  color: #0D3A5F;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.timer-modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.timer-modal-button {
+  padding: 10px 22px;
+  border: none;
+  border-radius: 24px;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+  box-shadow: 0 12px 24px rgba(24, 156, 204, 0.25);
+  color: #ffffff;
+  background: linear-gradient(180deg, #52D1EF 0%, #189CCC 100%);
+}
+
+.timer-modal-button:hover {
+  box-shadow: 0 10px 18px rgba(24, 156, 204, 0.35);
+}
+
+.timer-modal-button:active {
+  transform: scale(0.97);
+}
+
+.timer-modal-button--secondary {
+  background: linear-gradient(180deg, #C1C8D0 0%, #9DA4AD 100%);
+  box-shadow: 0 12px 24px rgba(157, 164, 173, 0.25);
+}
+
+.timer-modal-button--secondary:hover {
+  box-shadow: 0 10px 18px rgba(157, 164, 173, 0.35);
+}
+
+.timer-modal-button--danger {
+  background: linear-gradient(180deg, #EF5252 0%, #D62828 100%);
+  box-shadow: 0 12px 24px rgba(214, 40, 40, 0.25);
+}
+
+.timer-modal-button--danger:hover {
+  box-shadow: 0 10px 18px rgba(214, 40, 40, 0.35);
+}
+

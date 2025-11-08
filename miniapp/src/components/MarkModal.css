@@ -1,0 +1,72 @@
+.mark-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.mark-modal {
+  background: white;
+  border-radius: 20px;
+  padding: 30px;
+  min-width: 250px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.mark-modal-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.mark-modal-time {
+  font-size: 32px;
+  font-weight: 600;
+  color: #333;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Inter', 'SF UI Display', sans-serif;
+}
+
+.mark-modal-actions {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.mark-modal-button {
+  flex: 1;
+  padding: 12px;
+  border: 2px solid #1D7CB7;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mark-modal-button.edit {
+  background: #1D7CB7;
+  color: white;
+}
+
+.mark-modal-button.edit:hover {
+  background: #1565C0;
+}
+
+.mark-modal-button.delete {
+  background: white;
+  color: #EF7052;
+  border-color: #EF7052;
+}
+
+.mark-modal-button.delete:hover {
+  background: #FFF5F5;
+}
+
+

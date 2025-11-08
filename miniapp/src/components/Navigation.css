@@ -1,0 +1,55 @@
+.navigation {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 10vh;
+  min-height: 60px;
+  max-height: 80px;
+  background-color: #52D1EF;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 0 10px;
+  z-index: 1000;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.nav-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s;
+  flex: 1;
+  height: 100%;
+}
+
+.nav-icon:hover {
+  opacity: 0.8;
+}
+
+.nav-icon:active {
+  opacity: 0.6;
+}
+
+.nav-icon.active {
+  opacity: 1;
+}
+
+.nav-icon-img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  display: block;
+  /* Применяем фильтр для темно-синего цвета #1F4E5A */
+  filter: brightness(0) saturate(100%) invert(20%) sepia(25%) saturate(2000%) hue-rotate(170deg) brightness(0.7) contrast(1.1);
+}
+
+.nav-icon.active .nav-icon-img {
+  filter: brightness(0) saturate(100%) invert(20%) sepia(25%) saturate(2000%) hue-rotate(170deg) brightness(0.6) contrast(1.2);
+}
+

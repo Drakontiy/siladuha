@@ -2,13 +2,16 @@ import express from 'express';
 import path from 'path';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Разрешаем все хосты (для работы через прокси/туннель)
 app.set('trust proxy', true);
 
 // Статические файлы для miniapp
 app.use(express.static(path.join(__dirname, '../miniapp/dist')));
+
+// Статические файлы для media (иконки)
+app.use('/media', express.static(path.join(__dirname, '../media')));
 
 // Главная страница miniapp
 app.get('*', (req, res) => {
