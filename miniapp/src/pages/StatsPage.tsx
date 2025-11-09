@@ -3,7 +3,8 @@ import './StatsPage.css';
 import { formatDate, getStartOfDay, addDays } from '../utils/dateUtils';
 import CalendarModal from '../components/CalendarModal';
 import { getActivityState, subscribeToUserStateChanges } from '../utils/userStateSync';
-import { DayActivity, ActivityType } from '../types';
+import { DayActivity, ActivityType, TimeMark } from '../types';
+import { DAY_MINUTES } from '../utils/constants';
 import ActivityPieChart, { ActivityPieChartEntry } from '../components/ActivityPieChart';
 
 const RANGE_STORAGE_KEY = 'stats_period_range';
@@ -94,16 +95,41 @@ const StatsPage: React.FC = () => {
       const dateKey = formatDate(current);
       const activity: DayActivity | undefined = activityState[dateKey];
       if (activity) {
-        activity.intervals.forEach((interval) => {
+        const marks = activity.marks ?? [];
+        const marksMap = new Map<string, TimeMark>();
+        marks.forEach((mark) => {
+          if (mark?.id) {
+            marksMap.set(mark.id, mark);
+          }
+        });
+
+        const getMinuteForMark = (markId: string): number => {
+          if (markId === '__start_of_day__') {
+            return 0;
+          }
+          if (markId === '__end_of_day__') {
+            return DAY_MINUTES;
+          }
+          const mark = marksMap.get(markId);
+          if (!mark) {
+            return 0;
+          }
+          return Math.min(Math.max(mark.timestamp, 0), DAY_MINUTES);
+        };
+
+        (activity.intervals ?? []).forEach((interval) => {
           if (!interval.type) {
             return;
           }
-          const startMark = activity.marks.find((m) => m.id === interval.startMarkId);
-          const endMark = activity.marks.find((m) => m.id === interval.endMarkId);
-          if (!startMark || !endMark) {
+          if (!(interval.type in totals)) {
             return;
           }
-          const duration = Math.max(0, endMark.timestamp - startMark.timestamp);
+          const startMinute = getMinuteForMark(interval.startMarkId);
+          const endMinute = getMinuteForMark(interval.endMarkId);
+          if (endMinute <= startMinute) {
+            return;
+          }
+          const duration = endMinute - startMinute;
           totals[interval.type] = (totals[interval.type] ?? 0) + duration;
           totalMinutes += duration;
         });
