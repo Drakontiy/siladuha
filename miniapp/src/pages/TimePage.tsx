@@ -14,6 +14,7 @@ import ActivityChart from '../components/ActivityChart';
 import TimePicker from '../components/TimePicker';
 import MarkModal from '../components/MarkModal';
 import ActivityTypePicker from '../components/ActivityTypePicker';
+import CalendarModal from '../components/CalendarModal';
 import './TimePage.css';
 
 const VIRTUAL_BOUNDARIES = [
@@ -95,6 +96,7 @@ const TimePage: React.FC = () => {
   const [timerPrompt, setTimerPrompt] = useState<TimerPrompt | null>(null);
   const initialFocusDoneRef = useRef(false);
   const [confirmStopVisible, setConfirmStopVisible] = useState(false);
+  const [isCalendarOpen, setCalendarOpen] = useState(false);
 
   const todayKey = getDateKey(getStartOfDay(new Date()));
   const currentDateKey = getDateKey(currentDate);
@@ -373,6 +375,19 @@ const TimePage: React.FC = () => {
     setCurrentDate(addDays(currentDate, 1));
   };
 
+  const handleDateDisplayClick = () => {
+    setCalendarOpen(true);
+  };
+
+  const handleCalendarDateSelect = (date: Date) => {
+    setCurrentDate(getStartOfDay(date));
+    setCalendarOpen(false);
+  };
+
+  const handleCalendarClose = () => {
+    setCalendarOpen(false);
+  };
+
   const handleTimelineClick = (absoluteMinutes: number) => {
     const hour = Math.floor(absoluteMinutes / 60);
     const minute = absoluteMinutes % 60;
@@ -575,7 +590,9 @@ const TimePage: React.FC = () => {
         <button className="date-arrow" onClick={handlePreviousDay} aria-label="Предыдущий день">
           ◀
         </button>
-        <div className="date-display">{formatDate(currentDate)}</div>
+        <button className="date-display" onClick={handleDateDisplayClick} aria-label="Открыть календарь">
+          {formatDate(currentDate)}
+        </button>
         <button className="date-arrow" onClick={handleNextDay} aria-label="Следующий день">
           ▶
         </button>
@@ -683,6 +700,14 @@ const TimePage: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {isCalendarOpen && (
+        <CalendarModal
+          anchorDate={currentDate}
+          onSelectDate={handleCalendarDateSelect}
+          onClose={handleCalendarClose}
+        />
       )}
     </div>
   );

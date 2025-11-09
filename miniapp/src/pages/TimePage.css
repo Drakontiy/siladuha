@@ -42,6 +42,21 @@
   color: #52D1EF;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Inter', 'SF UI Display', sans-serif;
   letter-spacing: 0.5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 12px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.date-display:hover {
+  background: rgba(82, 209, 239, 0.12);
+  color: #36bedd;
+}
+
+.date-display:active {
+  background: rgba(82, 209, 239, 0.2);
 }
 
 .work-start-container {
