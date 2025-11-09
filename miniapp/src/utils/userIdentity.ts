@@ -4,7 +4,7 @@ export type MiniAppUser = {
   username?: string | null;
 };
 
-const DEFAULT_USER_ID = 'local';
+export const DEFAULT_USER_ID = 'local';
 const LAST_USER_ID_KEY = 'max_last_user_id';
 const LAST_USER_NAME_KEY = 'max_last_user_name';
 const STORAGE_PREFIX = 'max_miniapp';

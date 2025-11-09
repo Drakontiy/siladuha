@@ -1,4 +1,5 @@
 const path = require('path');
+const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 
@@ -33,6 +34,9 @@ module.exports = (env, argv) => {
       new HtmlWebpackPlugin({
         template: './miniapp/public/index.html',
         filename: 'index.html',
+      }),
+      new webpack.DefinePlugin({
+        'process.env.MINIAPP_API_BASE': JSON.stringify(process.env.MINIAPP_API_BASE ?? ''),
       }),
       new CopyWebpackPlugin({
         patterns: [

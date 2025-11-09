@@ -1,32 +1,6 @@
 import { DayActivity, TimeMark, ActivityInterval } from '../types';
 import { getDateKey } from './dateUtils';
-import { getUserScopedStorageKey } from './userIdentity';
-
-/**
- * Загружает данные активности из localStorage
- */
-export function loadActivityData(): Record<string, DayActivity> {
-  try {
-    const data = localStorage.getItem(getUserScopedStorageKey('activity_data'));
-    if (data) {
-      return JSON.parse(data);
-    }
-  } catch (error) {
-    console.error('Error loading activity data:', error);
-  }
-  return {};
-}
-
-/**
- * Сохраняет данные активности в localStorage
- */
-export function saveActivityData(data: Record<string, DayActivity>): void {
-  try {
-    localStorage.setItem(getUserScopedStorageKey('activity_data'), JSON.stringify(data));
-  } catch (error) {
-    console.error('Error saving activity data:', error);
-  }
-}
+import { getActivityState, setActivityState } from './userStateSync';
 
 /**
  * Получает активность для конкретной даты
@@ -141,5 +115,19 @@ export function deleteActivityInterval(date: Date, intervalId: string): void {
     allData[dateKey].intervals = allData[dateKey].intervals.filter(i => i.id !== intervalId);
     saveActivityData(allData);
   }
+}
+
+/**
+ * Загружает данные активности из памяти/сервера
+ */
+export function loadActivityData(): Record<string, DayActivity> {
+  return getActivityState();
+}
+
+/**
+ * Сохраняет данные активности и инициирует синхронизацию
+ */
+export function saveActivityData(data: Record<string, DayActivity>): void {
+  setActivityState(data);
 }
 

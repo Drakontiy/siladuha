@@ -1,29 +1,17 @@
 import { addDays, getDateKey, getStartOfDay } from './dateUtils';
 import { getDayActivity } from './storage';
 import { TimeMark } from '../types';
-import { getUserScopedStorageKey } from './userIdentity';
+import { DailyGoalState, HomeState, DEFAULT_HOME_STATE } from '../types/home';
+import { getHomeState as getSyncedHomeState, setHomeState as setSyncedHomeState } from './userStateSync';
 
 const DAY_TOTAL_MINUTES = 24 * 60;
 const VIRTUAL_START_ID = '__start_of_day__';
 const VIRTUAL_END_ID = '__end_of_day__';
 
-export interface DailyGoalState {
-  targetMinutes: number;
-  completed: boolean;
-  countedInStreak: boolean;
-  setAt: string;
-}
-
-export interface HomeState {
-  currentStreak: number;
-  lastProcessedDate: string | null;
-  goals: Record<string, DailyGoalState>;
-}
-
 const DEFAULT_STATE: HomeState = {
-  currentStreak: 0,
-  lastProcessedDate: null,
-  goals: {},
+  currentStreak: DEFAULT_HOME_STATE.currentStreak,
+  lastProcessedDate: DEFAULT_HOME_STATE.lastProcessedDate,
+  goals: { ...DEFAULT_HOME_STATE.goals },
 };
 
 const parseDateKey = (key: string): Date => {
@@ -38,29 +26,15 @@ const cloneState = (state: HomeState): HomeState => ({
 });
 
 export const loadHomeState = (): HomeState => {
-  try {
-    const raw = localStorage.getItem(getUserScopedStorageKey('home_state'));
-    if (!raw) {
-      return DEFAULT_STATE;
-    }
-    const parsed = JSON.parse(raw) as Partial<HomeState>;
-    return {
-      currentStreak: parsed.currentStreak ?? 0,
-      lastProcessedDate: parsed.lastProcessedDate ?? null,
-      goals: parsed.goals ?? {},
-    };
-  } catch (error) {
-    console.error('Error loading home state:', error);
-    return DEFAULT_STATE;
+  const state = getSyncedHomeState();
+  if (!state) {
+    return cloneState(DEFAULT_STATE);
   }
+  return cloneState(state);
 };
 
 export const saveHomeState = (state: HomeState): void => {
-  try {
-    localStorage.setItem(getUserScopedStorageKey('home_state'), JSON.stringify(state));
-  } catch (error) {
-    console.error('Error saving home state:', error);
-  }
+  setSyncedHomeState(cloneState(state));
 };
 
 export const setDailyGoal = (date: Date, minutes: number): HomeState => {

@@ -6,6 +6,7 @@ import PeoplePage from './pages/PeoplePage';
 import CalendarPage from './pages/CalendarPage';
 import HomePage from './pages/HomePage';
 import Navigation from './components/Navigation';
+import SyncStatusBadge from './components/SyncStatusBadge';
 
 type Page = 'home' | 'stats' | 'time' | 'people' | 'calendar';
 
@@ -35,6 +36,7 @@ const App: React.FC = () => {
         {renderPage()}
       </div>
       <Navigation currentPage={currentPage} onNavigate={setCurrentPage} />
+      <SyncStatusBadge />
     </div>
   );
 };
