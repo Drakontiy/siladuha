@@ -11,7 +11,7 @@ module.exports = (env, argv) => {
       path: path.resolve(__dirname, 'miniapp/dist'),
       filename: isProduction ? '[name].[contenthash].js' : '[name].js',
       clean: true,
-      publicPath: '/'
+      publicPath: isProduction ? '/siladuha/' : '/'
     },
     module: {
       rules: [
