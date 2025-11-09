@@ -1,14 +1,13 @@
-import { DayActivity, TimeMark, ActivityInterval, ActivityType } from '../types';
+import { DayActivity, TimeMark, ActivityInterval } from '../types';
 import { getDateKey } from './dateUtils';
-
-const STORAGE_KEY = 'activity_data';
+import { getUserScopedStorageKey } from './userIdentity';
 
 /**
  * Загружает данные активности из localStorage
  */
 export function loadActivityData(): Record<string, DayActivity> {
   try {
-    const data = localStorage.getItem(STORAGE_KEY);
+    const data = localStorage.getItem(getUserScopedStorageKey('activity_data'));
     if (data) {
       return JSON.parse(data);
     }
@@ -23,7 +22,7 @@ export function loadActivityData(): Record<string, DayActivity> {
  */
 export function saveActivityData(data: Record<string, DayActivity>): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(getUserScopedStorageKey('activity_data'), JSON.stringify(data));
   } catch (error) {
     console.error('Error saving activity data:', error);
   }

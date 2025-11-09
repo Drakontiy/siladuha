@@ -36,24 +36,87 @@ const createMiniAppKeyboard = (url: string, text = '🚀 Открыть Mini App
   ]);
 };
 
+type MaxUser = {
+  user_id?: number;
+  name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  username?: string | null;
+};
+
+const getUserFromContext = (ctx: Context): MaxUser | undefined => {
+  if (ctx.user) {
+    return ctx.user;
+  }
+
+  const messageSender = ctx.message?.sender;
+  if (messageSender) {
+    return messageSender;
+  }
+
+  const updateUser = (ctx.update as { user?: { user_id: number; name?: string } }).user;
+  if (updateUser) {
+    return updateUser;
+  }
+
+  return undefined;
+};
+
+const buildMiniAppUrlForContext = (ctx: Context): string => {
+  try {
+    const baseUrl = new URL(MINIAPP_URL);
+    const user = getUserFromContext(ctx);
+
+    if (user?.user_id) {
+      baseUrl.searchParams.set('user_id', String(user.user_id));
+    }
+
+    const firstName = user?.first_name ?? null;
+    const lastName = user?.last_name ?? null;
+    const legacyName = user?.name ?? null;
+
+    const composedName = [firstName, lastName]
+      .filter((value): value is string => !!value && value.trim().length > 0)
+      .join(' ')
+      .trim();
+
+    const nameToUse = composedName || legacyName || null;
+
+    if (nameToUse) {
+      baseUrl.searchParams.set('user_name', nameToUse);
+    }
+
+    const username = user?.username;
+    if (username) {
+      baseUrl.searchParams.set('username', username);
+    }
+
+    return baseUrl.toString();
+  } catch (error) {
+    console.error('Failed to build MiniApp URL with user context:', error);
+    return MINIAPP_URL;
+  }
+};
+
 const sendMiniAppLink = async (ctx: Context) => {
   try {
-    const isValidUrl = isSecureMiniAppUrl(MINIAPP_URL);
-    console.log('🔍 Checking URL:', MINIAPP_URL, 'Valid:', isValidUrl);
+    const urlWithContext = buildMiniAppUrlForContext(ctx);
+    const isValidUrl = isSecureMiniAppUrl(urlWithContext);
+    console.log('🔍 Checking URL:', urlWithContext, 'Valid:', isValidUrl);
 
     if (isValidUrl) {
       await ctx.reply(
         '👋 Привет! Нажми на кнопку ниже, чтобы открыть мини-приложение:',
         {
-          attachments: [createMiniAppKeyboard(MINIAPP_URL)],
+          attachments: [createMiniAppKeyboard(urlWithContext)],
         },
       );
       console.log('✅ Message sent with inline keyboard');
     } else {
       await ctx.reply(
-        `👋 Привет! Мини-приложение доступно по адресу:\n\n${MINIAPP_URL}\n\nНастройте HTTPS URL в .env, чтобы открывать его прямо внутри MAX.`,
+        `👋 Привет! Мини-приложение доступно по адресу:\n\n${urlWithContext}\n\nНастройте HTTPS URL в .env, чтобы открывать его прямо внутри MAX.`,
         {
-          attachments: [createMiniAppKeyboard(MINIAPP_URL, '🔗 Открыть в браузере')],
+          attachments: [createMiniAppKeyboard(urlWithContext, '🔗 Открыть в браузере')],
         },
       );
       console.log('⚠️ Fallback message sent with regular link');

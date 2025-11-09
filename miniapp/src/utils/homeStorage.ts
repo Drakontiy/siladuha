@@ -1,8 +1,8 @@
 import { addDays, getDateKey, getStartOfDay } from './dateUtils';
 import { getDayActivity } from './storage';
 import { TimeMark } from '../types';
+import { getUserScopedStorageKey } from './userIdentity';
 
-const HOME_STORAGE_KEY = 'home_state';
 const DAY_TOTAL_MINUTES = 24 * 60;
 const VIRTUAL_START_ID = '__start_of_day__';
 const VIRTUAL_END_ID = '__end_of_day__';
@@ -39,7 +39,7 @@ const cloneState = (state: HomeState): HomeState => ({
 
 export const loadHomeState = (): HomeState => {
   try {
-    const raw = localStorage.getItem(HOME_STORAGE_KEY);
+    const raw = localStorage.getItem(getUserScopedStorageKey('home_state'));
     if (!raw) {
       return DEFAULT_STATE;
     }
@@ -57,7 +57,7 @@ export const loadHomeState = (): HomeState => {
 
 export const saveHomeState = (state: HomeState): void => {
   try {
-    localStorage.setItem(HOME_STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(getUserScopedStorageKey('home_state'), JSON.stringify(state));
   } catch (error) {
     console.error('Error saving home state:', error);
   }
