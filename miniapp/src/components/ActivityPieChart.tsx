@@ -146,5 +146,3 @@ const ActivityPieChart: React.FC<ActivityPieChartProps> = ({ data }) => {
 
 export type { ActivityPieChartEntry };
 export default ActivityPieChart;
-
-

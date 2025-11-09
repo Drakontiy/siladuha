@@ -23,6 +23,7 @@ let initialized = false;
 let syncTimeout: number | undefined;
 let syncPending = false;
 const listeners = new Set<(status: SyncStatus) => void>();
+const stateListeners = new Set<() => void>();
 
 const cloneActivityData = (data: ActivityData): ActivityData =>
   JSON.parse(JSON.stringify(data ?? {}));
@@ -39,6 +40,16 @@ const notifyListeners = () => {
       listener({ ...syncStatus });
     } catch (error) {
       console.error('Error notifying sync listener:', error);
+    }
+  });
+};
+
+const notifyStateChange = () => {
+  stateListeners.forEach((listener) => {
+    try {
+      listener();
+    } catch (error) {
+      console.error('Error notifying state listener:', error);
     }
   });
 };
@@ -206,6 +217,7 @@ export const initializeUserStateSync = async (): Promise<void> => {
         lastSyncedAt: payload.updatedAt ?? null,
         error: undefined,
       });
+      notifyStateChange();
     } else {
       console.warn(`Failed to load remote state: ${response.status}`);
     }
@@ -217,6 +229,7 @@ export const initializeUserStateSync = async (): Promise<void> => {
     });
   } finally {
     initialized = true;
+    notifyStateChange();
   }
 };
 
@@ -226,6 +239,7 @@ export const setActivityState = (data: ActivityData): void => {
   activityData = cloneActivityData(data);
   writeLocalJson('activity_data', activityData);
   scheduleSync();
+  notifyStateChange();
 };
 
 export const getHomeState = (): HomeState => cloneHomeState(homeState);
@@ -234,6 +248,7 @@ export const setHomeState = (state: HomeState): void => {
   homeState = cloneHomeState(state);
   writeLocalJson('home_state', homeState);
   scheduleSync();
+  notifyStateChange();
 };
 
 export const subscribeToSyncStatus = (listener: (status: SyncStatus) => void): (() => void) => {
@@ -255,6 +270,13 @@ export const forceSyncNow = async (): Promise<void> => {
     syncTimeout = undefined;
   }
   await performSync();
+};
+
+export const subscribeToUserStateChanges = (listener: () => void): (() => void) => {
+  stateListeners.add(listener);
+  return () => {
+    stateListeners.delete(listener);
+  };
 };
 
 

@@ -13,22 +13,6 @@
   gap: 12px;
 }
 
-.stats-date-arrow {
-  background: none;
-  border: none;
-  color: #2563eb;
-  font-size: 20px;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 6px 10px;
-  border-radius: 10px;
-  transition: background 0.2s ease;
-}
-
-.stats-date-arrow:hover {
-  background: rgba(37, 99, 235, 0.12);
-}
-
 .stats-date-button {
   background: none;
   border: none;
@@ -70,6 +54,18 @@
   gap: 4px;
 }
 
+.stats-summary__item--interactive {
+  cursor: pointer;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+  border: none;
+  text-align: left;
+}
+
+.stats-summary__item--interactive:hover {
+  background: #e8f0ff;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.15);
+}
+
 .stats-summary__label {
   font-size: 12px;
   color: #64748b;
@@ -104,15 +100,6 @@
   .stats-header {
     flex-direction: column;
     align-items: flex-start;
-  }
-
-  .stats-date-arrow {
-    display: none;
-  }
-
-  .stats-date-button {
-    width: 100%;
-    text-align: left;
   }
 
   .stats-period-select {

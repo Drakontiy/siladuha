@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import './StatsPage.css';
 import { formatDate, getStartOfDay, addDays } from '../utils/dateUtils';
 import CalendarModal from '../components/CalendarModal';
 import { DAY_MINUTES } from '../utils/constants';
-import { getActivityState } from '../utils/userStateSync';
+import { getActivityState, subscribeToUserStateChanges } from '../utils/userStateSync';
 import { DayActivity } from '../types';
 import ActivityPieChart, { ActivityPieChartEntry } from '../components/ActivityPieChart';
 import { ActivityType } from '../types';
@@ -22,39 +22,105 @@ const PERIOD_OPTIONS: PeriodDefinition[] = [
   { label: 'Всё время', value: 'all' },
 ];
 
-const getPeriodEndDate = (start: Date, option: PeriodOption): Date => {
+const getOffsetForPeriod = (option: PeriodOption): number | null => {
   switch (option) {
     case 'day':
-      return start;
+      return 0;
     case 'week':
-      return addDays(start, 6);
+      return 6;
     case 'month':
-      return addDays(start, 29);
-    case 'all':
-      return getStartOfDay(new Date());
+      return 29;
     default:
-      return start;
+      return null;
   }
 };
 
+const clampToToday = (date: Date, today: Date): Date => {
+  return date > today ? today : date;
+};
+
+const calculateEndDate = (start: Date, option: PeriodOption, today: Date): Date => {
+  const offset = getOffsetForPeriod(option);
+  if (offset === null) {
+    return today;
+  }
+  let result = addDays(start, offset);
+  if (result < start) {
+    result = start;
+  }
+  return clampToToday(result, today);
+};
+
+const calculateStartDateFromEnd = (end: Date, option: PeriodOption, today: Date): Date => {
+  const offset = getOffsetForPeriod(option);
+  const clampedEnd = clampToToday(end, today);
+  if (offset === null) {
+    return clampedEnd;
+  }
+  let result = addDays(clampedEnd, -offset);
+  if (result > clampedEnd) {
+    result = clampedEnd;
+  }
+  return result;
+};
+
 const StatsPage: React.FC = () => {
-  const [selectedDate, setSelectedDate] = useState<Date>(getStartOfDay(new Date()));
+  const today = useMemo(() => getStartOfDay(new Date()), []);
+  const defaultStart = today;
+  const defaultEnd = calculateEndDate(defaultStart, 'week', today);
+
   const [period, setPeriod] = useState<PeriodOption>('week');
-  const [isCalendarOpen, setCalendarOpen] = useState(false);
+  const [startDate, setStartDate] = useState<Date>(defaultStart);
+  const [endDate, setEndDate] = useState<Date>(defaultEnd);
+  const [calendarMode, setCalendarMode] = useState<'start' | 'end' | null>(null);
+  const [dataVersion, setDataVersion] = useState(0);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToUserStateChanges(() => {
+      setDataVersion((prev) => prev + 1);
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    if (calendarMode) {
+      return;
+    }
+    if (period === 'all') {
+      const clampedEnd = clampToToday(endDate, today);
+      const clampedStart = clampToToday(startDate, today);
+      if (clampedEnd < clampedStart) {
+        setEndDate(clampedStart);
+      } else {
+        if (clampedStart !== startDate) {
+          setStartDate(clampedStart);
+        }
+        if (clampedEnd !== endDate) {
+          setEndDate(clampedEnd);
+        }
+      }
+      return;
+    }
+
+    const clampedStart = clampToToday(startDate, today);
+    const computedEnd = calculateEndDate(clampedStart, period, today);
+    if (clampedStart !== startDate || computedEnd !== endDate) {
+      setStartDate(clampedStart);
+      setEndDate(computedEnd);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period]);
 
   const activityState = getActivityState();
 
   const periodRange = useMemo(() => {
-    const start = getStartOfDay(selectedDate);
-    const end = getPeriodEndDate(start, period);
-    const today = getStartOfDay(new Date());
-
-    if (period === 'all' && selectedDate > today) {
-      return { start, end: today };
+    const rangeStart = clampToToday(startDate, today);
+    let rangeEnd = clampToToday(endDate, today);
+    if (rangeEnd < rangeStart) {
+      rangeEnd = rangeStart;
     }
-
-    return { start, end: end > today ? today : end };
-  }, [selectedDate, period]);
+    return { start: rangeStart, end: rangeEnd };
+  }, [startDate, endDate, today]);
 
   const aggregatedData = useMemo(() => {
     const totals: Record<Exclude<ActivityType, null>, number> = {
@@ -104,28 +170,37 @@ const StatsPage: React.FC = () => {
       .sort((a, b) => b.minutes - a.minutes);
 
     return { entries, dayCount };
-  }, [activityState, periodRange]);
+  }, [activityState, periodRange, dataVersion]);
 
-  const handleDateClick = () => {
-    setCalendarOpen(true);
-  };
-
-  const handlePrevDay = () => {
-    setSelectedDate(addDays(selectedDate, -1));
-  };
-
-  const handleNextDay = () => {
-    const today = getStartOfDay(new Date());
-    const next = addDays(selectedDate, 1);
-    if (next > today) {
-      return;
-    }
-    setSelectedDate(next);
+  const openCalendarForBoundary = (mode: 'start' | 'end') => {
+    setCalendarMode(mode);
   };
 
   const handleCalendarSelect = (date: Date) => {
-    setSelectedDate(getStartOfDay(date));
-    setCalendarOpen(false);
+    const selected = clampToToday(getStartOfDay(date), today);
+    if (calendarMode === 'start') {
+      if (period === 'all') {
+        setStartDate(selected);
+        if (selected > endDate) {
+          setEndDate(selected);
+        }
+      } else {
+        setStartDate(selected);
+        setEndDate(calculateEndDate(selected, period, today));
+      }
+    } else if (calendarMode === 'end') {
+      if (period === 'all') {
+        const clampedEnd = selected;
+        setEndDate(clampedEnd);
+        if (clampedEnd < startDate) {
+          setStartDate(clampedEnd);
+        }
+      } else {
+        setEndDate(selected);
+        setStartDate(calculateStartDateFromEnd(selected, period, today));
+      }
+    }
+    setCalendarMode(null);
   };
 
   const handlePeriodChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -136,15 +211,6 @@ const StatsPage: React.FC = () => {
   return (
     <div className="stats-page">
       <div className="stats-header">
-        <button className="stats-date-arrow" onClick={handlePrevDay} aria-label="Предыдущий день">
-          ◀
-        </button>
-        <button className="stats-date-button" onClick={handleDateClick} aria-label="Открыть календарь">
-          {formatDate(selectedDate)}
-        </button>
-        <button className="stats-date-arrow" onClick={handleNextDay} aria-label="Следующий день">
-          ▶
-        </button>
         <select
           className="stats-period-select"
           value={period}
@@ -163,14 +229,20 @@ const StatsPage: React.FC = () => {
           <span className="stats-summary__label">Дней в периоде</span>
           <span className="stats-summary__value">{aggregatedData.dayCount}</span>
         </div>
-        <div className="stats-summary__item">
+        <button
+          className="stats-summary__item stats-summary__item--interactive"
+          onClick={() => openCalendarForBoundary('start')}
+        >
           <span className="stats-summary__label">Начало</span>
           <span className="stats-summary__value">{formatDate(periodRange.start)}</span>
-        </div>
-        <div className="stats-summary__item">
+        </button>
+        <button
+          className="stats-summary__item stats-summary__item--interactive"
+          onClick={() => openCalendarForBoundary('end')}
+        >
           <span className="stats-summary__label">Конец</span>
           <span className="stats-summary__value">{formatDate(periodRange.end)}</span>
-        </div>
+        </button>
       </div>
 
       <div className="stats-chart-card">
@@ -183,11 +255,11 @@ const StatsPage: React.FC = () => {
         )}
       </div>
 
-      {isCalendarOpen && (
+      {calendarMode && (
         <CalendarModal
-          anchorDate={selectedDate}
+          anchorDate={calendarMode === 'start' ? periodRange.start : periodRange.end}
           onSelectDate={handleCalendarSelect}
-          onClose={() => setCalendarOpen(false)}
+          onClose={() => setCalendarMode(null)}
         />
       )}
     </div>
