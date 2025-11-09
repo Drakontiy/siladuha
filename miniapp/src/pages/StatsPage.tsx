@@ -66,7 +66,7 @@ const StatsPage: React.FC = () => {
     );
   }, [startDate, endDate]);
 
-  const activityState = getActivityState();
+  const activityState = useMemo(() => getActivityState(), [dataVersion]);
 
   const periodRange = useMemo(() => {
     const rangeStart = clampToToday(startDate, today);
