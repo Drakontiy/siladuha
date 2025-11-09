@@ -1,0 +1,123 @@
+.stats-page {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: calc(100vh - 80px);
+  overflow-y: auto;
+}
+
+.stats-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stats-date-arrow {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-size: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 10px;
+  transition: background 0.2s ease;
+}
+
+.stats-date-arrow:hover {
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.stats-date-button {
+  background: none;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #2563eb;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.stats-date-button:hover {
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.stats-period-select {
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #1f2937;
+  background: #ffffff;
+}
+
+.stats-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.stats-summary__item {
+  background: #f8fafc;
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stats-summary__label {
+  font-size: 12px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.stats-summary__value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.stats-chart-card {
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
+  padding: 16px;
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stats-empty {
+  text-align: center;
+  color: #64748b;
+  font-size: 14px;
+}
+
+@media (max-width: 420px) {
+  .stats-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .stats-date-arrow {
+    display: none;
+  }
+
+  .stats-date-button {
+    width: 100%;
+    text-align: left;
+  }
+
+  .stats-period-select {
+    width: 100%;
+  }
+}
+
+

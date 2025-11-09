@@ -1,0 +1,81 @@
+.activity-pie-chart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.activity-pie-chart__svg {
+  width: 220px;
+  height: 220px;
+}
+
+.activity-pie-chart__segment {
+  transition: transform 0.2s ease, filter 0.2s ease;
+  transform-origin: 50% 50%;
+}
+
+.activity-pie-chart__segment:hover {
+  transform: scale(1.03);
+  filter: brightness(1.05);
+}
+
+.activity-pie-chart__total {
+  font-size: 18px;
+  font-weight: 700;
+  fill: #0f172a;
+}
+
+.activity-pie-chart__label {
+  font-size: 12px;
+  fill: #64748b;
+}
+
+.activity-pie-chart__legend {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.activity-pie-chart__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(248, 250, 252, 0.9);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.activity-pie-chart__legend-color {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+.activity-pie-chart__legend-labels {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.activity-pie-chart__legend-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.activity-pie-chart__legend-meta {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.activity-pie-chart__placeholder {
+  text-align: center;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+

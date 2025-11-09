@@ -62,6 +62,6 @@ export const ACTIVITY_NAMES: Record<Exclude<ActivityType, null>, string> & { nul
   productive: 'Продуктивная работа',
   rest: 'Отдых',
   procrastination: 'Прокрастинация',
-  null: '',
+  null: 'Не отмечено',
 };
 
