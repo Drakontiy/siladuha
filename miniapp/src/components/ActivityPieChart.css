@@ -22,9 +22,17 @@
 }
 
 .activity-pie-chart__total {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   fill: #0f172a;
+}
+
+.activity-pie-chart__days {
+  font-size: 13px;
+  font-weight: 600;
+  fill: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
 }
 
 .activity-pie-chart__label {

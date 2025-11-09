@@ -11,6 +11,7 @@ interface ActivityPieChartEntry {
 
 interface ActivityPieChartProps {
   data: ActivityPieChartEntry[];
+  dayCount: number;
 }
 
 const formatDailyAverage = (minutes: number): string => {
@@ -25,7 +26,28 @@ const formatDailyAverage = (minutes: number): string => {
   return `${Math.round(minutes)} мин/день`;
 };
 
-const ActivityPieChart: React.FC<ActivityPieChartProps> = ({ data }) => {
+const formatHours = (minutes: number): string => {
+  const hours = minutes / 60;
+  if (hours >= 10) {
+    return `${Math.round(hours)} ч`;
+  }
+  return `${Math.round(hours * 10) / 10} ч`;
+};
+
+const formatDaysLabel = (dayCount: number): string => {
+  const abs = Math.abs(dayCount);
+  const mod10 = abs % 10;
+  const mod100 = abs % 100;
+  let suffix = 'дней';
+  if (mod10 === 1 && mod100 !== 11) {
+    suffix = 'день';
+  } else if (mod10 >= 2 && mod10 <= 4 && !(mod100 >= 12 && mod100 <= 14)) {
+    suffix = 'дня';
+  }
+  return `${dayCount} ${suffix}`;
+};
+
+const ActivityPieChart: React.FC<ActivityPieChartProps> = ({ data, dayCount }) => {
   const total = data.reduce((sum, entry) => sum + entry.minutes, 0);
 
   const segments = useMemo(() => {
@@ -114,10 +136,13 @@ const ActivityPieChart: React.FC<ActivityPieChartProps> = ({ data }) => {
 
         <circle cx="90" cy="90" r="32" fill="#ffffff" />
 
-        <text x="90" y="82" textAnchor="middle" className="activity-pie-chart__total">
-          {Math.round((total / 60) * 10) / 10} ч
+        <text x="90" y="74" textAnchor="middle" className="activity-pie-chart__days">
+          {formatDaysLabel(dayCount)}
         </text>
-        <text x="90" y="95" textAnchor="middle" className="activity-pie-chart__label">
+        <text x="90" y="92" textAnchor="middle" className="activity-pie-chart__total">
+          {formatHours(total)}
+        </text>
+        <text x="90" y="106" textAnchor="middle" className="activity-pie-chart__label">
           за период
         </text>
       </svg>

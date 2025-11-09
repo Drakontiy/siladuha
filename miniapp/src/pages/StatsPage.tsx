@@ -2,76 +2,47 @@ import React, { useEffect, useMemo, useState } from 'react';
 import './StatsPage.css';
 import { formatDate, getStartOfDay, addDays } from '../utils/dateUtils';
 import CalendarModal from '../components/CalendarModal';
-import { DAY_MINUTES } from '../utils/constants';
 import { getActivityState, subscribeToUserStateChanges } from '../utils/userStateSync';
-import { DayActivity } from '../types';
+import { DayActivity, ActivityType } from '../types';
 import ActivityPieChart, { ActivityPieChartEntry } from '../components/ActivityPieChart';
-import { ActivityType } from '../types';
 
-type PeriodOption = 'day' | 'week' | 'month' | 'all';
+const RANGE_STORAGE_KEY = 'stats_period_range';
 
-interface PeriodDefinition {
-  label: string;
-  value: PeriodOption;
-}
-
-const PERIOD_OPTIONS: PeriodDefinition[] = [
-  { label: 'День', value: 'day' },
-  { label: 'Неделя', value: 'week' },
-  { label: 'Месяц', value: 'month' },
-  { label: 'Всё время', value: 'all' },
-];
-
-const getOffsetForPeriod = (option: PeriodOption): number | null => {
-  switch (option) {
-    case 'day':
-      return 0;
-    case 'week':
-      return 6;
-    case 'month':
-      return 29;
-    default:
-      return null;
-  }
-};
-
-const clampToToday = (date: Date, today: Date): Date => {
-  return date > today ? today : date;
-};
-
-const calculateEndDate = (start: Date, option: PeriodOption, today: Date): Date => {
-  const offset = getOffsetForPeriod(option);
-  if (offset === null) {
-    return today;
-  }
-  let result = addDays(start, offset);
-  if (result < start) {
-    result = start;
-  }
-  return clampToToday(result, today);
-};
-
-const calculateStartDateFromEnd = (end: Date, option: PeriodOption, today: Date): Date => {
-  const offset = getOffsetForPeriod(option);
-  const clampedEnd = clampToToday(end, today);
-  if (offset === null) {
-    return clampedEnd;
-  }
-  let result = addDays(clampedEnd, -offset);
-  if (result > clampedEnd) {
-    result = clampedEnd;
-  }
-  return result;
-};
+const clampToToday = (date: Date, today: Date): Date => (date > today ? today : date);
 
 const StatsPage: React.FC = () => {
   const today = useMemo(() => getStartOfDay(new Date()), []);
-  const defaultStart = today;
-  const defaultEnd = calculateEndDate(defaultStart, 'week', today);
 
-  const [period, setPeriod] = useState<PeriodOption>('week');
-  const [startDate, setStartDate] = useState<Date>(defaultStart);
-  const [endDate, setEndDate] = useState<Date>(defaultEnd);
+  const loadStoredRange = (): { start: Date; end: Date } => {
+    const fallbackStart = addDays(today, -6);
+    const fallbackEnd = today;
+    if (typeof window === 'undefined') {
+      return { start: fallbackStart, end: fallbackEnd };
+    }
+    const raw = window.localStorage.getItem(RANGE_STORAGE_KEY);
+    if (!raw) {
+      return { start: fallbackStart, end: fallbackEnd };
+    }
+    try {
+      const parsed = JSON.parse(raw) as { start?: string; end?: string };
+      const storedStart = parsed.start ? getStartOfDay(new Date(parsed.start)) : fallbackStart;
+      const storedEnd = parsed.end ? getStartOfDay(new Date(parsed.end)) : fallbackEnd;
+      const clampedStart = clampToToday(storedStart, today);
+      let clampedEnd = clampToToday(storedEnd, today);
+      if (clampedEnd < clampedStart) {
+        clampedEnd = clampedStart;
+      }
+      return { start: clampedStart, end: clampedEnd };
+    } catch (error) {
+      console.warn('Failed to parse stored stats period range:', error);
+      return { start: fallbackStart, end: fallbackEnd };
+    }
+  };
+
+  const initialRange = loadStoredRange();
+
+  const [startDate, setStartDate] = useState<Date>(initialRange.start);
+  const [endDate, setEndDate] = useState<Date>(initialRange.end);
   const [calendarMode, setCalendarMode] = useState<'start' | 'end' | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
 
@@ -83,33 +54,17 @@ const StatsPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (calendarMode) {
+    if (typeof window === 'undefined') {
       return;
     }
-    if (period === 'all') {
-      const clampedEnd = clampToToday(endDate, today);
-      const clampedStart = clampToToday(startDate, today);
-      if (clampedEnd < clampedStart) {
-        setEndDate(clampedStart);
-      } else {
-        if (clampedStart !== startDate) {
-          setStartDate(clampedStart);
-        }
-        if (clampedEnd !== endDate) {
-          setEndDate(clampedEnd);
-        }
-      }
-      return;
-    }
-
-    const clampedStart = clampToToday(startDate, today);
-    const computedEnd = calculateEndDate(clampedStart, period, today);
-    if (clampedStart !== startDate || computedEnd !== endDate) {
-      setStartDate(clampedStart);
-      setEndDate(computedEnd);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period]);
+    window.localStorage.setItem(
+      RANGE_STORAGE_KEY,
+      JSON.stringify({
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+      }),
+    );
+  }, [startDate, endDate]);
 
   const activityState = getActivityState();
 
@@ -133,6 +88,7 @@ const StatsPage: React.FC = () => {
     const totalDays =
       Math.floor((periodRange.end.getTime() - periodRange.start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
 
+    let totalMinutes = 0;
     let current = periodRange.start;
     while (current <= periodRange.end) {
       const dateKey = formatDate(current);
@@ -149,6 +105,7 @@ const StatsPage: React.FC = () => {
           }
           const duration = Math.max(0, endMark.timestamp - startMark.timestamp);
           totals[interval.type] = (totals[interval.type] ?? 0) + duration;
+          totalMinutes += duration;
         });
       }
       current = addDays(current, 1);
@@ -159,7 +116,7 @@ const StatsPage: React.FC = () => {
     const entries: ActivityPieChartEntry[] = (Object.entries(totals) as Array<[Exclude<ActivityType, null>, number]>)
       .filter(([, minutes]) => minutes > 0)
       .map(([type, minutes]) => {
-        const percentage = (minutes / (DAY_MINUTES * dayCount)) * 100;
+        const percentage = totalMinutes > 0 ? (minutes / totalMinutes) * 100 : 0;
         return {
           type,
           minutes,
@@ -169,7 +126,7 @@ const StatsPage: React.FC = () => {
       })
       .sort((a, b) => b.minutes - a.minutes);
 
-    return { entries, dayCount };
+    return { entries, dayCount, totalMinutes };
   }, [activityState, periodRange, dataVersion]);
 
   const openCalendarForBoundary = (mode: 'start' | 'end') => {
@@ -179,56 +136,26 @@ const StatsPage: React.FC = () => {
   const handleCalendarSelect = (date: Date) => {
     const selected = clampToToday(getStartOfDay(date), today);
     if (calendarMode === 'start') {
-      if (period === 'all') {
-        setStartDate(selected);
-        if (selected > endDate) {
-          setEndDate(selected);
-        }
-      } else {
-        setStartDate(selected);
-        setEndDate(calculateEndDate(selected, period, today));
+      setStartDate(selected);
+      if (selected > endDate) {
+        setEndDate(selected);
       }
     } else if (calendarMode === 'end') {
-      if (period === 'all') {
-        const clampedEnd = selected;
-        setEndDate(clampedEnd);
-        if (clampedEnd < startDate) {
-          setStartDate(clampedEnd);
-        }
-      } else {
-        setEndDate(selected);
-        setStartDate(calculateStartDateFromEnd(selected, period, today));
+      setEndDate(selected);
+      if (selected < startDate) {
+        setStartDate(selected);
       }
     }
     setCalendarMode(null);
   };
 
-  const handlePeriodChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const next = event.target.value as PeriodOption;
-    setPeriod(next);
-  };
-
   return (
     <div className="stats-page">
       <div className="stats-header">
-        <select
-          className="stats-period-select"
-          value={period}
-          onChange={handlePeriodChange}
-        >
-          {PERIOD_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <h2 className="stats-title">Статистика</h2>
       </div>
 
       <div className="stats-summary">
-        <div className="stats-summary__item">
-          <span className="stats-summary__label">Дней в периоде</span>
-          <span className="stats-summary__value">{aggregatedData.dayCount}</span>
-        </div>
         <button
           className="stats-summary__item stats-summary__item--interactive"
           onClick={() => openCalendarForBoundary('start')}
@@ -247,7 +174,7 @@ const StatsPage: React.FC = () => {
 
       <div className="stats-chart-card">
         {aggregatedData.entries.length > 0 ? (
-          <ActivityPieChart data={aggregatedData.entries} />
+          <ActivityPieChart data={aggregatedData.entries} dayCount={aggregatedData.dayCount} />
         ) : (
           <div className="stats-empty">
             <p>Для выбранного периода нет данных.</p>
