@@ -25,9 +25,8 @@ const renderLoading = () => {
 };
 
 const bootstrap = async () => {
+  initializeUserIdentity();
   renderLoading();
-
-  await initializeUserIdentity();
 
   try {
     await initializeUserStateSync();

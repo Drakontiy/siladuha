@@ -18,13 +18,11 @@ import {
   notifyFriendRequestCreated,
   notifyFriendRequestDeclined,
 } from './services/notifications';
-import { consumeSessionToken } from './storage/sessionStore';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const API_BASE_PATH = '/api';
 const USER_ID_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
-const SESSION_TOKEN_REGEX = /^[a-zA-Z0-9_-]{10,128}$/;
 
 void initUserStateStore().catch((error) => {
   console.error('❌ Failed to initialize user state store:', error);
@@ -53,17 +51,6 @@ const sanitizeUserId = (raw: unknown): string | null => {
   }
   const trimmed = raw.trim();
   if (!trimmed || !USER_ID_REGEX.test(trimmed)) {
-    return null;
-  }
-  return trimmed;
-};
-
-const sanitizeSessionToken = (raw: unknown): string | null => {
-  if (typeof raw !== 'string') {
-    return null;
-  }
-  const trimmed = raw.trim();
-  if (!trimmed || !SESSION_TOKEN_REGEX.test(trimmed)) {
     return null;
   }
   return trimmed;
@@ -107,6 +94,13 @@ const markRequestById = (
       respondedAt: new Date().toISOString(),
     };
   });
+
+const removeFriendById = (friends: StoredFriend[], friendId: string): StoredFriend[] =>
+  friends.filter((friend) => friend.userId !== friendId);
+
+const extractPublicHomeState = (homeState: StoredUserState['homeState'] | undefined) => ({
+  currentStreak: homeState?.currentStreak ?? 0,
+});
 
 const removeRequestById = (requests: StoredFriendRequest[], requestId: string): StoredFriendRequest[] =>
   requests.filter((request) => request.id !== requestId);
@@ -156,34 +150,6 @@ app.post(`${API_BASE_PATH}/user/:userId/state`, async (req, res) => {
   } catch (error) {
     console.error('❌ Failed to write user state:', error);
     res.status(500).json({ error: 'Failed to write user state' });
-  }
-});
-
-app.post(`${API_BASE_PATH}/auth/session/exchange`, async (req, res) => {
-  const token = sanitizeSessionToken(req.body?.token);
-  if (!token) {
-    res.status(400).json({ error: 'Invalid session token' });
-    return;
-  }
-
-  try {
-    const sessionUser = consumeSessionToken(token);
-    if (!sessionUser) {
-      res.status(404).json({ error: 'Token expired or not found' });
-      return;
-    }
-
-    res.setHeader('Cache-Control', 'no-store');
-    res.json({
-      user: {
-        userId: sessionUser.userId,
-        name: sessionUser.name ?? null,
-        username: sessionUser.username ?? null,
-      },
-    });
-  } catch (error) {
-    console.error('❌ Failed to exchange session token:', error);
-    res.status(500).json({ error: 'Failed to exchange session token' });
   }
 });
 
@@ -402,11 +368,7 @@ app.post(`${API_BASE_PATH}/user/:userId/friends/request/:requestId/respond`, asy
       };
       updatedCounterpartSocial = {
         ...counterpartSocial,
-        friendRequests: markRequestById(
-          counterpartSocial.friendRequests,
-          requestId,
-          actionRaw === 'accept' ? 'accepted' : 'declined',
-        ),
+        friendRequests: removeRequestById(counterpartSocial.friendRequests, requestId),
       };
 
       const notification: StoredNotification = {
@@ -520,6 +482,59 @@ app.post(`${API_BASE_PATH}/user/:userId/friends/:friendId/sharing`, async (req, 
   }
 });
 
+app.delete(`${API_BASE_PATH}/user/:userId/friends/:friendId`, async (req, res) => {
+  const userId = sanitizeUserId(req.params.userId);
+  const friendId = sanitizeUserId(req.params.friendId);
+
+  if (!userId || !friendId) {
+    res.status(400).json({ error: 'Invalid request' });
+    return;
+  }
+
+  try {
+    const [userState, friendState] = await Promise.all([readUserState(userId), readUserState(friendId)]);
+    const userSocial = cloneSocialState(userState.social ?? cloneDefaultSocialState());
+    const friendSocial = cloneSocialState(friendState.social ?? cloneDefaultSocialState());
+
+    const friendRecord = userSocial.friends.find((friend) => friend.userId === friendId);
+    const reciprocalRecord = friendSocial.friends.find((friend) => friend.userId === userId);
+
+    if (!friendRecord || !reciprocalRecord) {
+      res.status(404).json({ error: 'Friend relationship not found' });
+      return;
+    }
+
+    const updatedUserSocial: StoredSocialState = {
+      ...userSocial,
+      friends: removeFriendById(userSocial.friends, friendId),
+    };
+
+    const updatedFriendSocial: StoredSocialState = {
+      ...friendSocial,
+      friends: removeFriendById(friendSocial.friends, userId),
+    };
+
+    const nextUserState: StoredUserState = {
+      ...userState,
+      social: updatedUserSocial,
+    };
+    const nextFriendState: StoredUserState = {
+      ...friendState,
+      social: updatedFriendSocial,
+    };
+
+    await Promise.all([writeUserState(userId, nextUserState), writeUserState(friendId, nextFriendState)]);
+
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+      social: cloneSocialState(updatedUserSocial),
+    });
+  } catch (error) {
+    console.error('❌ Failed to remove friend:', error);
+    res.status(500).json({ error: 'Failed to remove friend' });
+  }
+});
+
 app.get(`${API_BASE_PATH}/user/:targetUserId/shared/activity`, async (req, res) => {
   const targetUserId = sanitizeUserId(req.params.targetUserId);
   const viewerUserId = sanitizeUserId(req.query.viewer);
@@ -550,6 +565,7 @@ app.get(`${API_BASE_PATH}/user/:targetUserId/shared/activity`, async (req, res) 
     res.setHeader('Cache-Control', 'no-store');
     res.json({
       activityData: targetState.activityData,
+      homeState: extractPublicHomeState(targetState.homeState),
       updatedAt: targetState.updatedAt,
     });
   } catch (error) {

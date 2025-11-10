@@ -7,10 +7,14 @@ import {
   setSocialState,
   subscribeToUserStateChanges,
 } from '../utils/userStateSync';
+import FriendProfileModal from '../components/FriendProfileModal';
 import {
+  fetchSharedUserData,
+  removeFriend,
   respondToFriendRequest,
   sendFriendRequest,
   updateFriendSharing,
+  SharedUserHomeState,
 } from '../utils/friendsApi';
 
 const useSocialState = (): SocialState => {
@@ -39,6 +43,10 @@ const PeoplePage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [isAddFriendBusy, setIsAddFriendBusy] = useState(false);
+  const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [friendHomeStateCache, setFriendHomeStateCache] = useState<Record<string, SharedUserHomeState | null>>({});
 
   const incomingRequests = useMemo(
     () =>
@@ -65,6 +73,12 @@ const PeoplePage: React.FC = () => {
     [socialState.friends],
   );
 
+  const selectedFriend = useMemo(
+    () => friends.find((friend) => friend.userId === selectedFriendId) ?? null,
+    [friends, selectedFriendId],
+  );
+
+  const selectedFriendHomeState = selectedFriend ? friendHomeStateCache[selectedFriend.userId] : undefined;
   const notifications = useMemo(
     () => sortByDateDesc(socialState.notifications).slice(0, 5),
     [socialState.notifications],
@@ -82,6 +96,82 @@ const PeoplePage: React.FC = () => {
     });
   }, []);
 
+  useEffect(() => {
+    if (selectedFriendId && !socialState.friends.some((friend) => friend.userId === selectedFriendId)) {
+      setSelectedFriendId(null);
+    }
+  }, [selectedFriendId, socialState.friends]);
+
+  useEffect(() => {
+    setFriendHomeStateCache((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const friendId of Object.keys(next)) {
+        const friend = socialState.friends.find((candidate) => candidate.userId === friendId);
+        if (!friend || !friend.shareTheirStatsWithMe) {
+          delete next[friendId];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [socialState.friends]);
+
+  useEffect(() => {
+    if (!selectedFriendId) {
+      setProfileLoading(false);
+      setProfileError(null);
+      return;
+    }
+
+    const friend = socialState.friends.find((candidate) => candidate.userId === selectedFriendId);
+    if (!friend) {
+      setProfileError('Пользователь не найден');
+      setProfileLoading(false);
+      return;
+    }
+
+    if (!friend.shareTheirStatsWithMe) {
+      setProfileError('Этот пользователь пока не делится статистикой');
+      setProfileLoading(false);
+      return;
+    }
+
+    if (friendHomeStateCache[selectedFriendId] !== undefined) {
+      setProfileError(null);
+      setProfileLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setProfileLoading(true);
+    setProfileError(null);
+
+    void fetchSharedUserData(friend.userId)
+      .then((data) => {
+        if (cancelled) {
+          return;
+        }
+        setFriendHomeStateCache((prev) => ({
+          ...prev,
+          [friend.userId]: data.homeState ?? null,
+        }));
+        setProfileLoading(false);
+      })
+      .catch((fetchError) => {
+        if (cancelled) {
+          return;
+        }
+        console.error('Failed to load friend profile data:', fetchError);
+        setProfileError(fetchError instanceof Error ? fetchError.message : 'Не удалось загрузить данные друга');
+        setProfileLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedFriendId, socialState.friends, friendHomeStateCache]);
+
   const handleCopyId = async () => {
     if (!activeUser.userId) {
       return;
@@ -94,6 +184,40 @@ const PeoplePage: React.FC = () => {
       console.error('Failed to copy user id:', clipboardError);
       setError('Не удалось скопировать ID');
       setMessage(null);
+    }
+  };
+
+  const handleFriendClick = (friend: Friend) => {
+    setSelectedFriendId(friend.userId);
+    setProfileError(null);
+  };
+
+  const handleRemoveFriend = async (friend: Friend) => {
+    if (busyIds.has(friend.userId)) {
+      return;
+    }
+
+    withBusyFlag(friend.userId, true);
+    setError(null);
+
+    try {
+      const updatedSocial = await removeFriend(friend.userId);
+      setSocialState(updatedSocial);
+      setFriendHomeStateCache((prev) => {
+        const next = { ...prev };
+        delete next[friend.userId];
+        return next;
+      });
+      setMessage('Друг удалён');
+      if (selectedFriendId === friend.userId) {
+        setSelectedFriendId(null);
+      }
+    } catch (removeError) {
+      console.error('Failed to remove friend:', removeError);
+      setError(removeError instanceof Error ? removeError.message : 'Не удалось удалить друга');
+      setMessage(null);
+    } finally {
+      withBusyFlag(friend.userId, false);
     }
   };
 
@@ -169,6 +293,17 @@ const PeoplePage: React.FC = () => {
     try {
       const updatedSocial = await updateFriendSharing(friend.userId, share);
       setSocialState(updatedSocial);
+      setFriendHomeStateCache((prev) => {
+        const next = { ...prev };
+        delete next[friend.userId];
+        return next;
+      });
+      if (share) {
+        setProfileError(null);
+      } else if (selectedFriendId === friend.userId) {
+        setProfileError('Этот пользователь пока не делится статистикой');
+        setProfileLoading(false);
+      }
       setMessage(
         share
           ? 'Доступ к вашей статистике предоставлен'
@@ -284,29 +419,32 @@ const PeoplePage: React.FC = () => {
       ) : (
         <ul className="people-friends">
           {friends.map((friend) => (
-            <li key={friend.userId} className="people-friends__item">
-              <div className="people-friends__info">
-                <span className="people-friends__name">{friend.displayName || friend.userId}</span>
-                <span className="people-friends__id">{friend.userId}</span>
-              </div>
-              <div className="people-friends__controls">
-                <label className="people-toggle">
-                  <input
-                    type="checkbox"
-                    checked={friend.shareMyStatsWith}
-                    onChange={(event) => handleSharingToggle(friend, event.target.checked)}
-                    disabled={busyIds.has(friend.userId)}
-                  />
-                  <span>Разрешить доступ к моей статистике</span>
-                </label>
-                <div className="people-friends__stats-access">
-                  {friend.shareTheirStatsWithMe ? (
-                    <span className="people-tag people-tag--success">Видите его статистику</span>
-                  ) : (
-                    <span className="people-tag people-tag--inactive">Доступ к его статистике закрыт</span>
-                  )}
+            <li key={friend.userId}>
+              <button
+                type="button"
+                className="people-friends__item"
+                onClick={() => handleFriendClick(friend)}
+              >
+                <div className="people-friends__info">
+                  <span className="people-friends__name">{friend.displayName || friend.userId}</span>
+                  <span className="people-friends__id">{friend.userId}</span>
                 </div>
-              </div>
+                <div className="people-friends__badges">
+                  <span
+                    className={friend.shareMyStatsWith ? 'people-tag people-tag--success' : 'people-tag people-tag--inactive'}
+                  >
+                    {friend.shareMyStatsWith ? 'Вы делитесь статистикой' : 'Вы скрываете статистику'}
+                  </span>
+                  <span
+                    className={friend.shareTheirStatsWithMe ? 'people-tag people-tag--success' : 'people-tag people-tag--inactive'}
+                  >
+                    {friend.shareTheirStatsWithMe ? 'Он делится с вами' : 'Нет доступа к его статистике'}
+                  </span>
+                </div>
+                <span className="people-friends__chevron" aria-hidden="true">
+                  ›
+                </span>
+              </button>
             </li>
           ))}
         </ul>
@@ -341,6 +479,20 @@ const PeoplePage: React.FC = () => {
       {renderNotifications(notifications)}
       {renderRequests()}
       {renderFriends()}
+
+      {selectedFriend && (
+        <FriendProfileModal
+          friend={selectedFriend}
+          onClose={() => setSelectedFriendId(null)}
+          onToggleSharing={(share) => handleSharingToggle(selectedFriend, share)}
+          onRemoveFriend={() => handleRemoveFriend(selectedFriend)}
+          sharingBusy={busyIds.has(selectedFriend.userId)}
+          removingBusy={busyIds.has(selectedFriend.userId)}
+          homeState={selectedFriendHomeState}
+          isLoading={profileLoading}
+          error={profileError}
+        />
+      )}
     </div>
   );
 };

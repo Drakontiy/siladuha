@@ -2,7 +2,6 @@ import { DayActivity } from '../types';
 import { HomeState, DEFAULT_HOME_STATE } from '../types/home';
 import { DEFAULT_SOCIAL_STATE, SocialState } from '../types/social';
 import { DEFAULT_USER_ID, getActiveUser, getUserScopedStorageKey } from './userIdentity';
-import { buildApiUrl } from './api';
 
 type ActivityData = Record<string, DayActivity>;
 
@@ -92,6 +91,20 @@ const writeLocalJson = (key: string, value: unknown) => {
   }
 };
 
+const getApiBase = (): string => {
+  const envBase = (process.env.MINIAPP_API_BASE ?? '').trim();
+  const runtimeBase =
+    typeof window !== 'undefined' && (window as unknown as Record<string, string | undefined>).__MAX_API_BASE__;
+
+  const base = envBase || runtimeBase || (typeof window !== 'undefined' ? window.location.origin : '');
+  return base.replace(/\/+$/, '');
+};
+
+const buildEndpoint = (path: string): string => {
+  const base = getApiBase();
+  return `${base}${path}`;
+};
+
 const updateSyncStatus = (patch: Partial<SyncStatus>) => {
   syncStatus = { ...syncStatus, ...patch };
   notifyListeners();
@@ -110,7 +123,7 @@ const performSync = async () => {
   updateSyncStatus({ isSyncing: true, error: undefined });
 
   try {
-    const response = await fetch(buildApiUrl(`/api/user/${encodeURIComponent(activeUserId)}/state`), {
+    const response = await fetch(buildEndpoint(`/api/user/${encodeURIComponent(activeUserId)}/state`), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -202,7 +215,7 @@ export const initializeUserStateSync = async (): Promise<void> => {
   }
 
   try {
-    const response = await fetch(buildApiUrl(`/api/user/${encodeURIComponent(activeUserId)}/state`), {
+    const response = await fetch(buildEndpoint(`/api/user/${encodeURIComponent(activeUserId)}/state`), {
       method: 'GET',
       credentials: 'include',
     });
@@ -303,4 +316,9 @@ export const subscribeToUserStateChanges = (listener: () => void): (() => void) 
     stateListeners.delete(listener);
   };
 };
+
+export const getApiBaseUrl = (): string => getApiBase();
+
+export const buildApiUrl = (path: string): string => buildEndpoint(path);
+
 

@@ -1,7 +1,7 @@
 import { DayActivity } from '../types';
 import { FriendRequestStatus, SocialState } from '../types/social';
 import { DEFAULT_USER_ID, getActiveUser } from './userIdentity';
-import { buildApiUrl } from './api';
+import { buildApiUrl } from './userStateSync';
 
 type FriendRequestAction = Extract<FriendRequestStatus, 'accepted' | 'declined'>;
 
@@ -33,6 +33,15 @@ const getActiveUserId = (): string => {
   const user = getActiveUser();
   return user.userId ?? DEFAULT_USER_ID;
 };
+
+export type SharedUserHomeState = {
+  currentStreak: number;
+};
+
+export interface SharedUserData {
+  activityData: Record<string, DayActivity>;
+  homeState: SharedUserHomeState | null;
+}
 
 export const sendFriendRequest = async (
   targetUserId: string,
@@ -114,7 +123,7 @@ export const updateFriendSharing = async (friendId: string, shareMyStatsWith: bo
   return payload.social;
 };
 
-export const fetchSharedActivity = async (targetUserId: string): Promise<Record<string, DayActivity>> => {
+export const fetchSharedUserData = async (targetUserId: string): Promise<SharedUserData> => {
   const viewerId = getActiveUserId();
   if (!targetUserId || viewerId === DEFAULT_USER_ID) {
     throw new Error('Недоступно в режиме локального пользователя');
@@ -130,8 +139,29 @@ export const fetchSharedActivity = async (targetUserId: string): Promise<Record<
     },
   );
 
-  const payload = (await handleResponse(response)) as { activityData?: Record<string, DayActivity> };
-  return payload.activityData ?? {};
+  const payload = (await handleResponse(response)) as {
+    activityData?: Record<string, DayActivity>;
+    homeState?: SharedUserHomeState | null;
+  };
+  return {
+    activityData: payload.activityData ?? {},
+    homeState: payload.homeState ?? null,
+  };
+};
+
+export const removeFriend = async (friendId: string): Promise<SocialState> => {
+  const userId = getActiveUserId();
+  if (!friendId || userId === DEFAULT_USER_ID) {
+    throw new Error('Недоступно в режиме локального пользователя');
+  }
+
+  const response = await fetch(buildApiUrl(`/api/user/${encodeURIComponent(userId)}/friends/${encodeURIComponent(friendId)}`), {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+
+  const payload = (await handleResponse(response)) as { social: SocialState };
+  return payload.social;
 };
 
 

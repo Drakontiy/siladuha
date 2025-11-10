@@ -7,7 +7,7 @@ import {
   getSocialState,
   subscribeToUserStateChanges,
 } from '../utils/userStateSync';
-import { fetchSharedActivity } from '../utils/friendsApi';
+import { fetchSharedUserData, SharedUserData } from '../utils/friendsApi';
 import { DayActivity, ActivityType, TimeMark } from '../types';
 import { DAY_MINUTES } from '../utils/constants';
 import ActivityPieChart, { ActivityPieChartEntry } from '../components/ActivityPieChart';
@@ -60,7 +60,7 @@ const StatsPage: React.FC = () => {
   const [currentActivityState, setCurrentActivityState] = useState<Record<string, DayActivity>>(
     () => getActivityState(),
   );
-  const [friendActivityCache, setFriendActivityCache] = useState<Record<string, Record<string, DayActivity>>>({});
+  const [friendSharedCache, setFriendSharedCache] = useState<Record<string, SharedUserData>>({});
   const [isLoadingShared, setIsLoadingShared] = useState(false);
   const [sharedError, setSharedError] = useState<string | null>(null);
 
@@ -110,7 +110,7 @@ const StatsPage: React.FC = () => {
   }, [selectedUserId, activeUserId, socialState.friends]);
 
   useEffect(() => {
-    setFriendActivityCache((prev) => {
+    setFriendSharedCache((prev) => {
       const next = { ...prev };
       let changed = false;
       for (const friendId of Object.keys(next)) {
@@ -144,9 +144,9 @@ const StatsPage: React.FC = () => {
       return;
     }
 
-    const cached = friendActivityCache[selectedUserId];
+    const cached = friendSharedCache[selectedUserId];
     if (cached) {
-      setCurrentActivityState(cached);
+      setCurrentActivityState(cached.activityData);
       setSharedError(null);
       setIsLoadingShared(false);
       return;
@@ -156,16 +156,16 @@ const StatsPage: React.FC = () => {
     setIsLoadingShared(true);
     setSharedError(null);
 
-    void fetchSharedActivity(selectedUserId)
-      .then((activity) => {
+    void fetchSharedUserData(selectedUserId)
+      .then((data) => {
         if (cancelled) {
           return;
         }
-        setFriendActivityCache((prev) => ({
+        setFriendSharedCache((prev) => ({
           ...prev,
-          [selectedUserId]: activity,
+          [selectedUserId]: data,
         }));
-        setCurrentActivityState(activity);
+        setCurrentActivityState(data.activityData);
       })
       .catch((error) => {
         if (cancelled) {
@@ -184,7 +184,7 @@ const StatsPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedUserId, activeUserId, socialState.friends, friendActivityCache]);
+  }, [selectedUserId, activeUserId, socialState.friends, friendSharedCache]);
 
   const periodRange = useMemo(() => {
     const rangeStart = clampToToday(startDate, today);
