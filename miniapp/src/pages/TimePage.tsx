@@ -8,6 +8,7 @@ import {
   getIntervalBetweenMarks,
   loadActivityData,
   saveActivityData,
+  deleteActivityInterval,
 } from '../utils/storage';
 import { TimeMark, ActivityInterval, ActivityType } from '../types';
 import ActivityChart from '../components/ActivityChart';
@@ -475,6 +476,7 @@ const TimePage: React.FC = () => {
         const activityType = intervalToSplit.type;
         
         // Удаляем старый интервал
+        deleteActivityInterval(currentDate, intervalToSplit.id);
         const updatedIntervals = intervals.filter(i => i.id !== intervalToSplit!.id);
         
         // Создаем два новых интервала с тем же цветом
