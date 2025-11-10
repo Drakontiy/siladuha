@@ -42,12 +42,25 @@ export interface StoredAchievementsState {
   sleepSevenNights: StoredAchievementFlag;
 }
 
+export interface StoredCosmeticThemeProgress {
+  levelsUnlocked: number;
+  currentLevel: number;
+}
+
+export interface StoredHomeCosmeticsState {
+  homeBackground: {
+    byAchievement: Record<string, StoredCosmeticThemeProgress>;
+    activeSelection: { source: string; level: number } | null;
+  };
+}
+
 export interface StoredHomeState {
   currentStreak: number;
   lastProcessedDate: string | null;
   currency: number;
   goals: Record<string, StoredDailyGoalState>;
   achievements: StoredAchievementsState;
+  cosmetics: StoredHomeCosmeticsState;
 }
 
 export type StoredFriendRequestStatus = 'pending' | 'accepted' | 'declined';
@@ -106,6 +119,12 @@ export const DEFAULT_HOME_STATE: StoredHomeState = {
     firstGoalCompleted: { unlocked: false, unlockedAt: null },
     focusEightHours: { unlocked: false, unlockedAt: null },
     sleepSevenNights: { unlocked: false, unlockedAt: null },
+  },
+  cosmetics: {
+    homeBackground: {
+      byAchievement: {},
+      activeSelection: null,
+    },
   },
 };
 
@@ -180,6 +199,61 @@ const sanitizeActivityData = (input: unknown): Record<string, StoredDayActivity>
   return result;
 };
 
+const sanitizeCosmeticThemeProgress = (input: unknown): StoredCosmeticThemeProgress => {
+  if (!input || typeof input !== 'object') {
+    return {
+      levelsUnlocked: 0,
+      currentLevel: 0,
+    };
+  }
+
+  const source = input as Partial<StoredCosmeticThemeProgress>;
+  const levelsUnlocked = typeof source.levelsUnlocked === 'number' ? Math.max(0, source.levelsUnlocked) : 0;
+  let currentLevel = typeof source.currentLevel === 'number' ? Math.max(0, source.currentLevel) : 0;
+  if (currentLevel > levelsUnlocked) {
+    currentLevel = levelsUnlocked;
+  }
+
+  return {
+    levelsUnlocked,
+    currentLevel,
+  };
+};
+
+const sanitizeHomeCosmeticsState = (input: unknown): StoredHomeCosmeticsState => {
+  if (!input || typeof input !== 'object') {
+    return { ...DEFAULT_HOME_STATE.cosmetics };
+  }
+
+  const source = input as Partial<StoredHomeCosmeticsState>;
+  const byAchievementSource =
+    source?.homeBackground?.byAchievement && typeof source.homeBackground.byAchievement === 'object'
+      ? source.homeBackground.byAchievement
+      : {};
+
+  const sanitizedByAchievement: Record<string, StoredCosmeticThemeProgress> = {};
+  for (const [key, value] of Object.entries(byAchievementSource)) {
+    sanitizedByAchievement[key] = sanitizeCosmeticThemeProgress(value);
+  }
+
+  let activeSelection: { source: string; level: number } | null = null;
+  const active = source?.homeBackground?.activeSelection;
+  if (active && typeof active === 'object') {
+    const sourceKey = typeof (active as { source?: unknown }).source === 'string' ? (active as { source: string }).source : null;
+    const levelValue = typeof (active as { level?: unknown }).level === 'number' ? (active as { level: number }).level : null;
+    if (sourceKey && levelValue !== null) {
+      activeSelection = { source: sourceKey, level: levelValue };
+    }
+  }
+
+  return {
+    homeBackground: {
+      byAchievement: sanitizedByAchievement,
+      activeSelection,
+    },
+  };
+};
+
 const sanitizeHomeState = (input: unknown): StoredHomeState => {
   if (!input || typeof input !== 'object') {
     return { ...DEFAULT_HOME_STATE };
@@ -231,6 +305,7 @@ const sanitizeHomeState = (input: unknown): StoredHomeState => {
         (achievementsSource as StoredAchievementsState).sleepSevenNights,
       ),
     },
+    cosmetics: sanitizeHomeCosmeticsState(source.cosmetics),
   };
 };
 

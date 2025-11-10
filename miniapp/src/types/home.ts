@@ -17,12 +17,27 @@ export interface AchievementsState {
   sleepSevenNights: AchievementFlag;
 }
 
+export type AchievementKey = keyof AchievementsState;
+
+export interface CosmeticThemeProgress {
+  levelsUnlocked: number;
+  currentLevel: number;
+}
+
+export interface HomeCosmeticsState {
+  homeBackground: {
+    byAchievement: Partial<Record<AchievementKey, CosmeticThemeProgress>>;
+    activeSelection: { source: AchievementKey; level: number } | null;
+  };
+}
+
 export interface HomeState {
   currentStreak: number;
   lastProcessedDate: string | null;
   currency: number;
   goals: Record<string, DailyGoalState>;
   achievements: AchievementsState;
+  cosmetics: HomeCosmeticsState;
 }
 
 export const DEFAULT_HOME_STATE: HomeState = {
@@ -34,5 +49,11 @@ export const DEFAULT_HOME_STATE: HomeState = {
     firstGoalCompleted: { unlocked: false, unlockedAt: null },
     focusEightHours: { unlocked: false, unlockedAt: null },
     sleepSevenNights: { unlocked: false, unlockedAt: null },
+  },
+  cosmetics: {
+    homeBackground: {
+      byAchievement: {},
+      activeSelection: null,
+    },
   },
 };

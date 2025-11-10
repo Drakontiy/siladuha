@@ -1,9 +1,12 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import TimePicker from '../components/TimePicker';
+import HomeCustomizationModal from '../components/HomeCustomizationModal';
 import {
   GOAL_REWARD,
   calculateProductiveMinutes,
   ensureAchievementsUpToDate,
+  getHomeBackgroundColor,
+  getHomeBackgroundOptions,
   loadHomeState,
   processPendingDays,
   saveHomeState,
@@ -61,6 +64,9 @@ const HomePage: React.FC = () => {
   });
 
   const [showGoalPicker, setShowGoalPicker] = useState(false);
+  const [showCustomizationModal, setShowCustomizationModal] = useState(false);
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const [recentlyUnlocked, setRecentlyUnlocked] = useState<boolean>(false);
 
   const todayStart = getStartOfDay(new Date());
   const todayKey = getDateKey(todayStart);
@@ -129,6 +135,7 @@ const HomePage: React.FC = () => {
     if (achievementsResult.changed) {
       state = achievementsResult.state;
       mutated = true;
+      setRecentlyUnlocked(true);
     }
 
     if (mutated) {
@@ -207,8 +214,12 @@ const HomePage: React.FC = () => {
   const streakImage = homeState.currentStreak > 0 ? 'media/happy1.svg' : 'media/sad.svg';
   const streakImageAlt = homeState.currentStreak > 0 ? 'Отличное настроение' : 'Пора собраться';
 
+  const backgroundColor = useMemo(() => getHomeBackgroundColor(homeState), [homeState]);
+  const backgroundOptions = useMemo(() => getHomeBackgroundOptions(homeState), [homeState]);
+  const currency = homeState.currency;
+
   return (
-    <div className="home-page">
+    <div className="home-page" style={{ backgroundColor }}>
       <div className="home-header">
         <h2 className="home-title">Вы в ударе {homeState.currentStreak} {streakWord}</h2>
         {!todayGoal && (
@@ -233,12 +244,42 @@ const HomePage: React.FC = () => {
         <img src={streakImage} alt={streakImageAlt} className="home-illustration-image" />
       </div>
 
+      <div className="home-actions">
+        <button
+          className="home-customize-button"
+          onClick={() => {
+            setShowCustomizationModal(true);
+            setRecentlyUnlocked(false);
+            setPurchaseError(null);
+          }}
+        >
+          Кастомизация
+          {recentlyUnlocked && <span className="home-customize-badge">!</span>}
+        </button>
+        <div className="home-currency">
+          <span className="home-currency__label">Природный газ</span>
+          <span className="home-currency__value">{currency.toLocaleString('ru-RU')}</span>
+        </div>
+      </div>
+
       {showGoalPicker && (
         <TimePicker
           onTimeSelect={handleGoalSelect}
           onCancel={handleGoalPickerCancel}
           initialHour={todayGoal ? Math.floor(todayGoal.targetMinutes / 60) : undefined}
           initialMinute={todayGoal ? todayGoal.targetMinutes % 60 : undefined}
+        />
+      )}
+
+      {showCustomizationModal && (
+        <HomeCustomizationModal
+          options={backgroundOptions}
+          onClose={() => setShowCustomizationModal(false)}
+          onStateChange={() => {
+            setHomeState(loadHomeState());
+            setPurchaseError(null);
+          }}
+          currency={currency}
         />
       )}
     </div>

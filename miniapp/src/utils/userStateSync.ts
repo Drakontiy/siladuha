@@ -1,5 +1,5 @@
 import { DayActivity } from '../types';
-import { HomeState, DEFAULT_HOME_STATE } from '../types/home';
+import { HomeState, DEFAULT_HOME_STATE, CosmeticThemeProgress, AchievementKey } from '../types/home';
 import { DEFAULT_SOCIAL_STATE, SocialState } from '../types/social';
 import { DEFAULT_USER_ID, getActiveUser, getUserScopedStorageKey } from './userIdentity';
 
@@ -37,12 +37,49 @@ const cloneGoals = (goals: HomeState['goals']): HomeState['goals'] => {
   return result;
 };
 
+const cloneCosmeticThemeProgress = (
+  progress: CosmeticThemeProgress | undefined,
+): CosmeticThemeProgress | undefined => {
+  if (!progress) {
+    return undefined;
+  }
+  return {
+    levelsUnlocked: progress.levelsUnlocked,
+    currentLevel: progress.currentLevel,
+  };
+};
+
+const cloneCosmetics = (cosmetics: HomeState['cosmetics']): HomeState['cosmetics'] => {
+  const byAchievement: HomeState['cosmetics']['homeBackground']['byAchievement'] = {};
+  const sourceMap = cosmetics.homeBackground.byAchievement ?? {};
+  (Object.keys(sourceMap) as AchievementKey[]).forEach((key) => {
+    const cloned = cloneCosmeticThemeProgress(sourceMap[key]);
+    if (cloned) {
+      byAchievement[key] = cloned;
+    }
+  });
+
+  const active = cosmetics.homeBackground.activeSelection;
+  const activeSelection =
+    active && typeof active.source === 'string' && typeof active.level === 'number'
+      ? { source: active.source, level: active.level }
+      : null;
+
+  return {
+    homeBackground: {
+      byAchievement,
+      activeSelection,
+    },
+  };
+};
+
 const cloneHomeState = (state: HomeState): HomeState => ({
   currentStreak: state.currentStreak,
   lastProcessedDate: state.lastProcessedDate,
   currency: state.currency,
   goals: cloneGoals(state.goals),
   achievements: cloneAchievements(state.achievements),
+  cosmetics: cloneCosmetics(state.cosmetics),
 });
 
 let homeState: HomeState = cloneHomeState(DEFAULT_HOME_STATE);

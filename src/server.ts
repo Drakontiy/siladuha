@@ -14,6 +14,8 @@ import {
   StoredDailyGoalState,
   StoredAchievementsState,
   StoredAchievementFlag,
+  StoredCosmeticThemeProgress,
+  StoredHomeCosmeticsState,
   StoredHomeState,
   StoredUserState,
 } from './storage/userStateStore';
@@ -82,12 +84,41 @@ const cloneStoredGoals = (goals: Record<string, StoredDailyGoalState>): Record<s
   return result;
 };
 
+const cloneStoredCosmeticThemeProgress = (
+  progress: StoredCosmeticThemeProgress | undefined,
+): StoredCosmeticThemeProgress => ({
+  levelsUnlocked: progress?.levelsUnlocked ?? 0,
+  currentLevel: progress?.currentLevel ?? 0,
+});
+
+const cloneStoredCosmetics = (cosmetics: StoredHomeCosmeticsState | undefined): StoredHomeCosmeticsState => {
+  const byAchievementSource = cosmetics?.homeBackground?.byAchievement ?? {};
+  const clonedByAchievement: Record<string, StoredCosmeticThemeProgress> = {};
+  for (const [key, value] of Object.entries(byAchievementSource)) {
+    clonedByAchievement[key] = cloneStoredCosmeticThemeProgress(value);
+  }
+
+  const active = cosmetics?.homeBackground?.activeSelection;
+  const activeSelection =
+    active && typeof active.source === 'string' && typeof active.level === 'number'
+      ? { source: active.source, level: active.level }
+      : null;
+
+  return {
+    homeBackground: {
+      byAchievement: clonedByAchievement,
+      activeSelection,
+    },
+  };
+};
+
 const cloneStoredHomeState = (state: StoredHomeState): StoredHomeState => ({
   currentStreak: state.currentStreak,
   lastProcessedDate: state.lastProcessedDate,
   currency: state.currency,
   goals: cloneStoredGoals(state.goals),
   achievements: cloneStoredAchievements(state.achievements),
+  cosmetics: cloneStoredCosmetics(state.cosmetics),
 });
 
 const cloneDefaultHomeState = () => cloneStoredHomeState(DEFAULT_USER_STATE.homeState);
