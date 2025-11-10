@@ -466,21 +466,31 @@ const TimePage: React.FC = () => {
       }
       
       // Ищем интервал, который нужно разделить
-      let intervalToSplit: ActivityInterval | null = null;
-      
-      // Проверяем интервал между предыдущей и следующей меткой
-      intervalToSplit = getIntervalBetweenMarks(currentDate, prevMarkId, nextMarkId);
-      
-      // Если нашли интервал для разделения, копируем цвет на новые интервалы
+      let intervalToSplit: ActivityInterval | null = getIntervalBetweenMarks(
+        currentDate,
+        prevMarkId,
+        nextMarkId
+      );
+
+      // Удаляем все интервалы с такими границами и используем информацию о типе активности
       const removedIntervals = deleteIntervalsBetweenMarks(currentDate, prevMarkId, nextMarkId);
-      const intervalToSplit = removedIntervals.find(interval => interval.type !== null) ?? null;
+      if (!intervalToSplit) {
+        intervalToSplit = removedIntervals.find(interval => interval.type !== null) ?? null;
+      }
 
       if (intervalToSplit) {
         const activityType = intervalToSplit.type;
 
+        const removedIntervalIds = new Set(removedIntervals.map(interval => interval.id));
+        if (intervalToSplit.id) {
+          removedIntervalIds.add(intervalToSplit.id);
+        }
+
         // Удаляем локально все старые интервалы между выбранными метками
         const updatedIntervals = intervals.filter(
-          i => !(i.startMarkId === prevMarkId && i.endMarkId === nextMarkId)
+          i =>
+            !(i.startMarkId === prevMarkId && i.endMarkId === nextMarkId) &&
+            !removedIntervalIds.has(i.id)
         );
 
         // Создаем два новых интервала с тем же цветом
