@@ -1,3 +1,5 @@
+import { buildApiUrl } from './api';
+
 type MaybeNullable<T> = T | null | undefined;
 
 export type MiniAppUser = {
@@ -130,6 +132,78 @@ const tryParseJson = (raw: string): unknown => {
   try {
     return JSON.parse(raw);
   } catch {
+    return null;
+  }
+};
+
+const getSessionTokenFromQuery = (): string | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('session_token');
+    if (!token) {
+      return null;
+    }
+    const trimmed = token.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  } catch {
+    return null;
+  }
+};
+
+const removeSessionTokenFromUrl = () => {
+  if (typeof window === 'undefined' || typeof window.history?.replaceState !== 'function') {
+    return;
+  }
+  try {
+    const currentUrl = new URL(window.location.href);
+    if (!currentUrl.searchParams.has('session_token')) {
+      return;
+    }
+    currentUrl.searchParams.delete('session_token');
+    window.history.replaceState({}, document.title, currentUrl.toString());
+  } catch {
+    // ignore
+  }
+};
+
+const exchangeSessionToken = async (token: string): Promise<MiniAppUser | null> => {
+  try {
+    const response = await fetch(buildApiUrl('/api/auth/session/exchange'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({ token }),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as {
+      user?: {
+        userId?: string;
+        name?: string | null;
+        username?: string | null;
+      };
+    };
+
+    const user = payload?.user;
+    if (!user?.userId) {
+      return null;
+    }
+
+    return {
+      userId: user.userId,
+      name: user.name ?? undefined,
+      username: user.username ?? null,
+    };
+  } catch (error) {
+    console.warn('Failed to exchange session token:', error);
     return null;
   }
 };
@@ -367,6 +441,16 @@ export const initializeUserIdentity = async (): Promise<MiniAppUser> => {
   }
 
   identityPromise = (async () => {
+    const sessionToken = getSessionTokenFromQuery();
+    if (sessionToken) {
+      const tokenUser = await exchangeSessionToken(sessionToken);
+      if (tokenUser) {
+        setActiveUser(tokenUser);
+        removeSessionTokenFromUrl();
+        return activeUser;
+      }
+    }
+
     const fromQuery = parseUserFromQuery();
     if (fromQuery) {
       setActiveUser(fromQuery);

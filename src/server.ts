@@ -18,11 +18,13 @@ import {
   notifyFriendRequestCreated,
   notifyFriendRequestDeclined,
 } from './services/notifications';
+import { consumeSessionToken } from './storage/sessionStore';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const API_BASE_PATH = '/api';
 const USER_ID_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
+const SESSION_TOKEN_REGEX = /^[a-zA-Z0-9_-]{10,128}$/;
 
 void initUserStateStore().catch((error) => {
   console.error('❌ Failed to initialize user state store:', error);
@@ -51,6 +53,17 @@ const sanitizeUserId = (raw: unknown): string | null => {
   }
   const trimmed = raw.trim();
   if (!trimmed || !USER_ID_REGEX.test(trimmed)) {
+    return null;
+  }
+  return trimmed;
+};
+
+const sanitizeSessionToken = (raw: unknown): string | null => {
+  if (typeof raw !== 'string') {
+    return null;
+  }
+  const trimmed = raw.trim();
+  if (!trimmed || !SESSION_TOKEN_REGEX.test(trimmed)) {
     return null;
   }
   return trimmed;
@@ -143,6 +156,34 @@ app.post(`${API_BASE_PATH}/user/:userId/state`, async (req, res) => {
   } catch (error) {
     console.error('❌ Failed to write user state:', error);
     res.status(500).json({ error: 'Failed to write user state' });
+  }
+});
+
+app.post(`${API_BASE_PATH}/auth/session/exchange`, async (req, res) => {
+  const token = sanitizeSessionToken(req.body?.token);
+  if (!token) {
+    res.status(400).json({ error: 'Invalid session token' });
+    return;
+  }
+
+  try {
+    const sessionUser = consumeSessionToken(token);
+    if (!sessionUser) {
+      res.status(404).json({ error: 'Token expired or not found' });
+      return;
+    }
+
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+      user: {
+        userId: sessionUser.userId,
+        name: sessionUser.name ?? null,
+        username: sessionUser.username ?? null,
+      },
+    });
+  } catch (error) {
+    console.error('❌ Failed to exchange session token:', error);
+    res.status(500).json({ error: 'Failed to exchange session token' });
   }
 });
 

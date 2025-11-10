@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import { Bot, Context, Keyboard } from '@maxhub/max-bot-api';
+import { createSessionToken } from './storage/sessionStore';
 
 dotenv.config();
 
@@ -89,6 +90,19 @@ const buildMiniAppUrlForContext = (ctx: Context): string => {
     const username = user?.username;
     if (username) {
       baseUrl.searchParams.set('username', username);
+    }
+
+    if (user?.user_id) {
+      try {
+        const token = createSessionToken({
+          userId: String(user.user_id),
+          name: nameToUse,
+          username: username ?? null,
+        });
+        baseUrl.searchParams.set('session_token', token);
+      } catch (tokenError) {
+        console.warn('⚠️ Failed to create session token for user:', tokenError);
+      }
     }
 
     return baseUrl.toString();

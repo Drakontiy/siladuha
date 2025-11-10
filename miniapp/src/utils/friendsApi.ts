@@ -1,7 +1,7 @@
 import { DayActivity } from '../types';
 import { FriendRequestStatus, SocialState } from '../types/social';
 import { DEFAULT_USER_ID, getActiveUser } from './userIdentity';
-import { buildApiUrl } from './userStateSync';
+import { buildApiUrl } from './api';
 
 type FriendRequestAction = Extract<FriendRequestStatus, 'accepted' | 'declined'>;
 
