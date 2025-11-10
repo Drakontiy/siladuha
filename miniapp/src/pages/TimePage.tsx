@@ -8,7 +8,7 @@ import {
   getIntervalBetweenMarks,
   loadActivityData,
   saveActivityData,
-  deleteActivityInterval,
+  deleteIntervalsBetweenMarks,
 } from '../utils/storage';
 import { TimeMark, ActivityInterval, ActivityType } from '../types';
 import ActivityChart from '../components/ActivityChart';
@@ -472,13 +472,17 @@ const TimePage: React.FC = () => {
       intervalToSplit = getIntervalBetweenMarks(currentDate, prevMarkId, nextMarkId);
       
       // Если нашли интервал для разделения, копируем цвет на новые интервалы
-      if (intervalToSplit && intervalToSplit.type !== null) {
+      const removedIntervals = deleteIntervalsBetweenMarks(currentDate, prevMarkId, nextMarkId);
+      const intervalToSplit = removedIntervals.find(interval => interval.type !== null) ?? null;
+
+      if (intervalToSplit) {
         const activityType = intervalToSplit.type;
-        
-        // Удаляем старый интервал
-        deleteActivityInterval(currentDate, intervalToSplit.id);
-        const updatedIntervals = intervals.filter(i => i.id !== intervalToSplit!.id);
-        
+
+        // Удаляем локально все старые интервалы между выбранными метками
+        const updatedIntervals = intervals.filter(
+          i => !(i.startMarkId === prevMarkId && i.endMarkId === nextMarkId)
+        );
+
         // Создаем два новых интервала с тем же цветом
         const leftInterval: ActivityInterval = {
           id: `${Date.now()}-${Math.random()}`,
@@ -486,20 +490,20 @@ const TimePage: React.FC = () => {
           endMarkId: newMark.id,
           type: activityType,
         };
-        
+
         const rightInterval: ActivityInterval = {
           id: `${Date.now()}-${Math.random()}-2`,
           startMarkId: newMark.id,
           endMarkId: nextMarkId,
           type: activityType,
         };
-        
+
         updatedIntervals.push(leftInterval);
         updatedIntervals.push(rightInterval);
-        
+
         saveActivityInterval(currentDate, leftInterval);
         saveActivityInterval(currentDate, rightInterval);
-        
+
         setIntervals(updatedIntervals);
       }
     }

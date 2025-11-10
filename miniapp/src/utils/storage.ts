@@ -118,6 +118,37 @@ export function deleteActivityInterval(date: Date, intervalId: string): void {
 }
 
 /**
+ * Удаляет все интервалы между двумя метками и возвращает удаленные интервалы
+ */
+export function deleteIntervalsBetweenMarks(
+  date: Date,
+  startMarkId: string,
+  endMarkId: string
+): ActivityInterval[] {
+  const dateKey = getDateKey(date);
+  const allData = loadActivityData();
+
+  if (!allData[dateKey] || !allData[dateKey].intervals) {
+    return [];
+  }
+
+  const removed: ActivityInterval[] = [];
+  allData[dateKey].intervals = allData[dateKey].intervals.filter((interval) => {
+    const matches = interval.startMarkId === startMarkId && interval.endMarkId === endMarkId;
+    if (matches) {
+      removed.push(interval);
+    }
+    return !matches;
+  });
+
+  if (removed.length > 0) {
+    saveActivityData(allData);
+  }
+
+  return removed;
+}
+
+/**
  * Загружает данные активности из памяти/сервера
  */
 export function loadActivityData(): Record<string, DayActivity> {
