@@ -1,3 +1,5 @@
+type MaybeNullable<T> = T | null | undefined;
+
 export type MiniAppUser = {
   userId: string;
   name?: string;
@@ -9,7 +11,9 @@ const LAST_USER_ID_KEY = 'max_last_user_id';
 const LAST_USER_NAME_KEY = 'max_last_user_name';
 const STORAGE_PREFIX = 'max_miniapp';
 const TELEGRAM_POLL_INTERVAL_MS = 150;
-const TELEGRAM_POLL_ATTEMPTS = 40; // ~6 seconds
+const TELEGRAM_POLL_ATTEMPTS = 40; // ~6 секунд ожидания
+const MESSENGER_WAIT_TIMEOUT_MS = 6000;
+const MESSENGER_REQUEST_INTERVAL_MS = 250;
 
 let activeUser: MiniAppUser = { userId: DEFAULT_USER_ID };
 let identityPromise: Promise<MiniAppUser> | null = null;
@@ -26,7 +30,107 @@ const safeLocalStorageSet = (key: string, value: string) => {
   try {
     window.localStorage.setItem(key, value);
   } catch {
-    // Игнорируем ошибки (например, в приватном режиме)
+    // Игнорируем ошибки (например, приватный режим)
+  }
+};
+
+const ensureString = (value: MaybeNullable<unknown>): string | undefined => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  return undefined;
+};
+
+const buildFullName = (source: Record<string, unknown>): string | undefined => {
+  const display = ensureString(
+    source.display_name ??
+      source.displayName ??
+      source.full_name ??
+      source.fullName ??
+      source.name ??
+      source.title,
+  );
+  if (display) {
+    return display;
+  }
+
+  const first = ensureString(source.first_name ?? source.firstName);
+  const last = ensureString(source.last_name ?? source.lastName);
+  const combined = [first, last].filter(Boolean).join(' ').trim();
+  return combined.length > 0 ? combined : undefined;
+};
+
+const extractUserFromObject = (source: Record<string, unknown>): MiniAppUser | null => {
+  const userId =
+    ensureString(
+      source.userId ??
+        source.user_id ??
+        source.id ??
+        source.uid ??
+        source.userID ??
+        source.profile_id ??
+        source.profileId,
+    ) ?? null;
+
+  if (!userId) {
+    return null;
+  }
+
+  const name = buildFullName(source);
+  const username = ensureString(source.username ?? source.login ?? source.nick ?? source.nickname) ?? null;
+
+  return {
+    userId,
+    name,
+    username,
+  };
+};
+
+const extractUserFromUnknown = (input: unknown): MiniAppUser | null => {
+  if (!input || typeof input !== 'object') {
+    return null;
+  }
+
+  const record = input as Record<string, unknown>;
+
+  const direct = extractUserFromObject(record);
+  if (direct) {
+    return direct;
+  }
+
+  const possibleNestedKeys = [
+    'user',
+    'profile',
+    'from',
+    'sender',
+    'payload',
+    'context',
+    'data',
+    'account',
+  ];
+
+  for (const key of possibleNestedKeys) {
+    const nested = record[key];
+    if (nested && typeof nested === 'object') {
+      const extracted = extractUserFromUnknown(nested);
+      if (extracted) {
+        return extracted;
+      }
+    }
+  }
+
+  return null;
+};
+
+const tryParseJson = (raw: string): unknown => {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
   }
 };
 
@@ -52,87 +156,169 @@ const parseUserFromQuery = (): MiniAppUser | null => {
   }
 };
 
-const parseTelegramUserFromUnsafe = (): MiniAppUser | null => {
+const readUserFromMessengerGlobals = (): MiniAppUser | null => {
   try {
-    const telegram = (window as unknown as {
-      Telegram?: {
-        WebApp?: {
-          initDataUnsafe?: {
-            user?: { id?: number; first_name?: string; last_name?: string; username?: string };
-          };
-          ready?: () => void;
-        };
-      };
-    }).Telegram;
+    const globalAny = window as unknown as Record<string, unknown>;
+    const candidates = [
+      globalAny.__MAX_USER__,
+      (globalAny.__MAX_CONTEXT__ as Record<string, unknown> | undefined)?.user,
+      globalAny.__MAX_CONTEXT__,
+      globalAny.MAX_USER,
+      globalAny.maxUser,
+      (globalAny.MAX_CONTEXT as Record<string, unknown> | undefined)?.user,
+      (globalAny.MAX as Record<string, unknown> | undefined)?.user,
+      (globalAny.MAX as Record<string, unknown> | undefined)?.context,
+      (globalAny.MAX_APP as Record<string, unknown> | undefined)?.user,
+    ];
 
-    const user = telegram?.WebApp?.initDataUnsafe?.user;
-    if (!user?.id) {
-      return null;
+    for (const candidate of candidates) {
+      const extracted = extractUserFromUnknown(candidate);
+      if (extracted) {
+        return extracted;
+      }
     }
+  } catch {
+    // ignore
+  }
+  return null;
+};
 
-    telegram?.WebApp?.ready?.();
+const requestMessengerContext = () => {
+  if (typeof window === 'undefined' || window === window.parent) {
+    return;
+  }
 
-    const firstName = user.first_name ?? '';
-    const lastName = user.last_name ?? '';
-    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+  const payloads = [
+    { type: 'max:getUser' },
+    { type: 'max:getContext' },
+    { type: 'miniapp:getUser' },
+    { type: 'miniapp:getContext' },
+    { type: 'getUser' },
+    { type: 'getContext' },
+    { method: 'getUser' },
+    { method: 'getContext' },
+  ];
 
-    return {
-      userId: String(user.id),
-      name: fullName || undefined,
-      username: user.username ?? null,
+  for (const payload of payloads) {
+    try {
+      window.parent?.postMessage(payload, '*');
+    } catch {
+      // ignore
+    }
+    try {
+      window.parent?.postMessage(JSON.stringify(payload), '*');
+    } catch {
+      // ignore
+    }
+  }
+};
+
+const waitForMessengerUser = async (): Promise<MiniAppUser | null> => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const immediate = readUserFromMessengerGlobals();
+  if (immediate) {
+    return immediate;
+  }
+
+  return new Promise<MiniAppUser | null>((resolve) => {
+    let resolved = false;
+
+    const tryResolve = (input?: unknown) => {
+      if (resolved) {
+        return;
+      }
+      const fromInput = input ? extractUserFromUnknown(input) : null;
+      const candidate = fromInput ?? readUserFromMessengerGlobals();
+      if (candidate) {
+        resolved = true;
+        cleanup();
+        resolve(candidate);
+      }
     };
+
+    const onMessage = (event: MessageEvent) => {
+      if (resolved) {
+        return;
+      }
+      tryResolve(event.data);
+      if (typeof event.data === 'string') {
+        tryResolve(tryParseJson(event.data));
+      }
+    };
+
+    const sendRequests = () => {
+      requestMessengerContext();
+      tryResolve();
+    };
+
+    const cleanup = () => {
+      window.removeEventListener('message', onMessage);
+      window.clearInterval(intervalId);
+      window.clearTimeout(timeoutId);
+    };
+
+    window.addEventListener('message', onMessage);
+
+    const intervalId = window.setInterval(sendRequests, MESSENGER_REQUEST_INTERVAL_MS);
+    const timeoutId = window.setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        cleanup();
+        resolve(null);
+      }
+    }, MESSENGER_WAIT_TIMEOUT_MS);
+
+    sendRequests();
+  });
+};
+
+const telegramEnv = (): MaybeNullable<{
+  WebApp?: { initDataUnsafe?: unknown; initData?: string; ready?: () => void };
+}> => {
+  try {
+    return (window as unknown as { Telegram?: { WebApp?: { initDataUnsafe?: unknown; initData?: string; ready?: () => void } } })
+      .Telegram;
   } catch {
     return null;
   }
 };
 
-const parseTelegramUserFromInitData = (): MiniAppUser | null => {
-  try {
-    const telegram = (window as unknown as {
-      Telegram?: {
-        WebApp?: {
-          initData?: string;
-          ready?: () => void;
-        };
-      };
-    }).Telegram;
-
-    const rawInitData = telegram?.WebApp?.initData;
-    if (!rawInitData || rawInitData.length === 0) {
-      return null;
-    }
-
-    const params = new URLSearchParams(rawInitData);
-    const userJson = params.get('user');
-    if (!userJson) {
-      return null;
-    }
-
-    const parsed = JSON.parse(userJson) as {
-      id?: number;
-      first_name?: string;
-      last_name?: string;
-      username?: string;
-    };
-
-    if (!parsed?.id) {
-      return null;
-    }
-
-    telegram?.WebApp?.ready?.();
-
-    const firstName = parsed.first_name ?? '';
-    const lastName = parsed.last_name ?? '';
-    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
-
-    return {
-      userId: String(parsed.id),
-      name: fullName || undefined,
-      username: parsed.username ?? null,
-    };
-  } catch {
+const parseTelegramUserFromUnsafe = (): MiniAppUser | null => {
+  const telegram = telegramEnv();
+  const user = (telegram?.WebApp?.initDataUnsafe as { user?: Record<string, unknown> } | undefined)?.user;
+  if (!user) {
     return null;
   }
+
+  const extracted = extractUserFromUnknown(user);
+  if (extracted) {
+    telegram?.WebApp?.ready?.();
+  }
+  return extracted;
+};
+
+const parseTelegramUserFromInitData = (): MiniAppUser | null => {
+  const telegram = telegramEnv();
+  const rawInitData = telegram?.WebApp?.initData;
+  if (!rawInitData) {
+    return null;
+  }
+
+  const params = new URLSearchParams(rawInitData);
+  const userJson = params.get('user');
+  if (!userJson) {
+    return null;
+  }
+
+  const parsed = tryParseJson(userJson);
+  const extracted = extractUserFromUnknown(parsed);
+  if (extracted) {
+    telegram?.WebApp?.ready?.();
+  }
+  return extracted;
 };
 
 const parseUserFromTelegram = (): MiniAppUser | null =>
@@ -187,20 +373,25 @@ export const initializeUserIdentity = async (): Promise<MiniAppUser> => {
       return activeUser;
     }
 
+    const messengerImmediate = readUserFromMessengerGlobals();
+    if (messengerImmediate) {
+      setActiveUser(messengerImmediate);
+      return activeUser;
+    }
+
     const telegramImmediate = parseUserFromTelegram();
     if (telegramImmediate) {
       setActiveUser(telegramImmediate);
       return activeUser;
     }
 
-    const telegramAsync = await waitForTelegramUser();
-    if (telegramAsync) {
-      setActiveUser(telegramAsync);
-      return activeUser;
-    }
+    const [messengerAsync, telegramAsync] = await Promise.all([
+      waitForMessengerUser(),
+      waitForTelegramUser(),
+    ]);
 
-    const lastKnown = loadLastKnownUser();
-    setActiveUser(lastKnown ?? { userId: DEFAULT_USER_ID });
+    const resolvedUser = messengerAsync ?? telegramAsync ?? loadLastKnownUser();
+    setActiveUser(resolvedUser ?? { userId: DEFAULT_USER_ID });
     return activeUser;
   })();
 
