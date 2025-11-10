@@ -11,6 +11,10 @@ import {
   StoredFriendRequest,
   StoredNotification,
   StoredSocialState,
+  StoredDailyGoalState,
+  StoredAchievementsState,
+  StoredAchievementFlag,
+  StoredHomeState,
   StoredUserState,
 } from './storage/userStateStore';
 import {
@@ -56,11 +60,37 @@ const sanitizeUserId = (raw: unknown): string | null => {
   return trimmed;
 };
 
-const cloneDefaultHomeState = () => ({
-  currentStreak: DEFAULT_USER_STATE.homeState.currentStreak,
-  lastProcessedDate: DEFAULT_USER_STATE.homeState.lastProcessedDate,
-  goals: { ...DEFAULT_USER_STATE.homeState.goals },
+const cloneStoredAchievementFlag = (flag: StoredAchievementFlag): StoredAchievementFlag => ({
+  unlocked: flag.unlocked,
+  unlockedAt: flag.unlockedAt,
 });
+
+const cloneStoredAchievements = (achievements: StoredAchievementsState): StoredAchievementsState => ({
+  firstGoalCompleted: cloneStoredAchievementFlag(achievements.firstGoalCompleted),
+  focusEightHours: cloneStoredAchievementFlag(achievements.focusEightHours),
+  sleepSevenNights: cloneStoredAchievementFlag(achievements.sleepSevenNights),
+});
+
+const cloneStoredGoals = (goals: Record<string, StoredDailyGoalState>): Record<string, StoredDailyGoalState> => {
+  const result: Record<string, StoredDailyGoalState> = {};
+  Object.entries(goals ?? {}).forEach(([key, goal]) => {
+    if (!goal) {
+      return;
+    }
+    result[key] = { ...goal };
+  });
+  return result;
+};
+
+const cloneStoredHomeState = (state: StoredHomeState): StoredHomeState => ({
+  currentStreak: state.currentStreak,
+  lastProcessedDate: state.lastProcessedDate,
+  currency: state.currency,
+  goals: cloneStoredGoals(state.goals),
+  achievements: cloneStoredAchievements(state.achievements),
+});
+
+const cloneDefaultHomeState = () => cloneStoredHomeState(DEFAULT_USER_STATE.homeState);
 
 const cloneSocialState = (state: StoredSocialState): StoredSocialState => ({
   friends: state.friends.map((friend) => ({ ...friend })),

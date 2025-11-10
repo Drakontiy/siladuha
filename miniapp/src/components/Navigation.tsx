@@ -1,7 +1,7 @@
 import React from 'react';
 import './Navigation.css';
 
-type Page = 'home' | 'stats' | 'time' | 'people' | 'calendar';
+type Page = 'home' | 'stats' | 'time' | 'people' | 'subjects';
 
 interface NavigationProps {
   currentPage: Page;
@@ -14,7 +14,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onNavigate }) => {
     { id: 'stats' as Page, svg: '2.svg', alt: 'Статистика' },
     { id: 'time' as Page, svg: '3.svg', alt: 'Время' },
     { id: 'people' as Page, svg: '4.svg', alt: 'Люди' },
-    { id: 'calendar' as Page, svg: '5.svg', alt: 'Календарь' },
+    { id: 'subjects' as Page, svg: '5.svg', alt: 'Предметы' },
   ];
 
   return (

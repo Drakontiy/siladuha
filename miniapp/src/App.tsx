@@ -3,12 +3,12 @@ import './App.css';
 import TimePage from './pages/TimePage';
 import StatsPage from './pages/StatsPage';
 import PeoplePage from './pages/PeoplePage';
-import CalendarPage from './pages/CalendarPage';
+import SubjectsPage from './pages/SubjectsPage';
 import HomePage from './pages/HomePage';
 import Navigation from './components/Navigation';
 import SyncStatusBadge from './components/SyncStatusBadge';
 
-type Page = 'home' | 'stats' | 'time' | 'people' | 'calendar';
+type Page = 'home' | 'stats' | 'time' | 'people' | 'subjects';
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>('time');
@@ -23,8 +23,8 @@ const App: React.FC = () => {
         return <TimePage />;
       case 'people':
         return <PeoplePage />;
-      case 'calendar':
-        return <CalendarPage />;
+      case 'subjects':
+        return <SubjectsPage />;
       default:
         return <TimePage />;
     }

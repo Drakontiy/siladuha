@@ -27,13 +27,27 @@ export interface StoredDailyGoalState {
   targetMinutes: number;
   completed: boolean;
   countedInStreak: boolean;
+  rewardGranted: boolean;
   setAt: string;
+}
+
+export interface StoredAchievementFlag {
+  unlocked: boolean;
+  unlockedAt: string | null;
+}
+
+export interface StoredAchievementsState {
+  firstGoalCompleted: StoredAchievementFlag;
+  focusEightHours: StoredAchievementFlag;
+  sleepSevenNights: StoredAchievementFlag;
 }
 
 export interface StoredHomeState {
   currentStreak: number;
   lastProcessedDate: string | null;
+  currency: number;
   goals: Record<string, StoredDailyGoalState>;
+  achievements: StoredAchievementsState;
 }
 
 export type StoredFriendRequestStatus = 'pending' | 'accepted' | 'declined';
@@ -86,7 +100,13 @@ const DATA_DIR = path.resolve(__dirname, '../data/users');
 export const DEFAULT_HOME_STATE: StoredHomeState = {
   currentStreak: 0,
   lastProcessedDate: null,
+  currency: 0,
   goals: {},
+  achievements: {
+    firstGoalCompleted: { unlocked: false, unlockedAt: null },
+    focusEightHours: { unlocked: false, unlockedAt: null },
+    sleepSevenNights: { unlocked: false, unlockedAt: null },
+  },
 };
 
 export const DEFAULT_SOCIAL_STATE: StoredSocialState = {
@@ -178,14 +198,39 @@ const sanitizeHomeState = (input: unknown): StoredHomeState => {
       targetMinutes: typeof goal.targetMinutes === 'number' ? goal.targetMinutes : 0,
       completed: typeof goal.completed === 'boolean' ? goal.completed : false,
       countedInStreak: typeof goal.countedInStreak === 'boolean' ? goal.countedInStreak : false,
+      rewardGranted: typeof goal.rewardGranted === 'boolean' ? goal.rewardGranted : false,
       setAt: typeof goal.setAt === 'string' ? goal.setAt : new Date().toISOString(),
     };
   }
 
+  const sanitizeAchievement = (input: unknown): StoredAchievementFlag => {
+    if (!input || typeof input !== 'object') {
+      return { unlocked: false, unlockedAt: null };
+    }
+    const flag = input as Partial<StoredAchievementFlag>;
+    return {
+      unlocked: typeof flag.unlocked === 'boolean' ? flag.unlocked : false,
+      unlockedAt: typeof flag.unlockedAt === 'string' ? flag.unlockedAt : null,
+    };
+  };
+
+  const achievementsSource =
+    source.achievements && typeof source.achievements === 'object' ? source.achievements : {};
+
   return {
     currentStreak: typeof source.currentStreak === 'number' ? source.currentStreak : 0,
     lastProcessedDate: typeof source.lastProcessedDate === 'string' ? source.lastProcessedDate : null,
+    currency: typeof source.currency === 'number' ? source.currency : 0,
     goals,
+    achievements: {
+      firstGoalCompleted: sanitizeAchievement(
+        (achievementsSource as StoredAchievementsState).firstGoalCompleted,
+      ),
+      focusEightHours: sanitizeAchievement((achievementsSource as StoredAchievementsState).focusEightHours),
+      sleepSevenNights: sanitizeAchievement(
+        (achievementsSource as StoredAchievementsState).sleepSevenNights,
+      ),
+    },
   };
 };
 

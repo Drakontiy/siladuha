@@ -14,7 +14,38 @@ export interface SyncStatus {
 const SYNC_DEBOUNCE_MS = 1_000;
 
 let activityData: ActivityData = {};
-let homeState: HomeState = { ...DEFAULT_HOME_STATE, goals: { ...DEFAULT_HOME_STATE.goals } };
+
+const cloneAchievementFlag = (flag: HomeState['achievements']['firstGoalCompleted']): HomeState['achievements']['firstGoalCompleted'] => ({
+  unlocked: flag.unlocked,
+  unlockedAt: flag.unlockedAt,
+});
+
+const cloneAchievements = (achievements: HomeState['achievements']): HomeState['achievements'] => ({
+  firstGoalCompleted: cloneAchievementFlag(achievements.firstGoalCompleted),
+  focusEightHours: cloneAchievementFlag(achievements.focusEightHours),
+  sleepSevenNights: cloneAchievementFlag(achievements.sleepSevenNights),
+});
+
+const cloneGoals = (goals: HomeState['goals']): HomeState['goals'] => {
+  const result: HomeState['goals'] = {};
+  Object.entries(goals ?? {}).forEach(([key, goal]) => {
+    if (!goal) {
+      return;
+    }
+    result[key] = { ...goal };
+  });
+  return result;
+};
+
+const cloneHomeState = (state: HomeState): HomeState => ({
+  currentStreak: state.currentStreak,
+  lastProcessedDate: state.lastProcessedDate,
+  currency: state.currency,
+  goals: cloneGoals(state.goals),
+  achievements: cloneAchievements(state.achievements),
+});
+
+let homeState: HomeState = cloneHomeState(DEFAULT_HOME_STATE);
 let socialState: SocialState = {
   friends: [],
   friendRequests: [],
@@ -33,12 +64,6 @@ const stateListeners = new Set<() => void>();
 
 const cloneActivityData = (data: ActivityData): ActivityData =>
   JSON.parse(JSON.stringify(data ?? {}));
-
-const cloneHomeState = (state: HomeState): HomeState => ({
-  currentStreak: state.currentStreak,
-  lastProcessedDate: state.lastProcessedDate,
-  goals: { ...state.goals },
-});
 
 const cloneSocialState = (state: SocialState): SocialState => ({
   friends: state.friends.map((friend) => ({ ...friend })),
@@ -204,9 +229,7 @@ export const initializeUserStateSync = async (): Promise<void> => {
   activeUserId = user.userId ?? DEFAULT_USER_ID;
 
   activityData = cloneActivityData(readLocalJson<ActivityData>('activity_data', {}));
-  homeState = cloneHomeState(
-    readLocalJson<HomeState>('home_state', { ...DEFAULT_HOME_STATE, goals: { ...DEFAULT_HOME_STATE.goals } }),
-  );
+  homeState = cloneHomeState(readLocalJson<HomeState>('home_state', DEFAULT_HOME_STATE));
   socialState = cloneSocialState(readLocalJson<SocialState>('social_state', { ...DEFAULT_SOCIAL_STATE }));
 
   if (activeUserId === DEFAULT_USER_ID) {

@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import TimePicker from '../components/TimePicker';
 import {
+  GOAL_REWARD,
   calculateProductiveMinutes,
+  ensureAchievementsUpToDate,
   loadHomeState,
   processPendingDays,
   saveHomeState,
@@ -81,17 +83,51 @@ const HomePage: React.FC = () => {
     const productive = calculateProductiveMinutes(today);
 
     const goalForToday = state.goals[todayDateKey];
-    if (goalForToday && goalForToday.targetMinutes > 0 && productive >= goalForToday.targetMinutes && !goalForToday.completed) {
-      const updatedGoal = { ...goalForToday, completed: true, countedInStreak: true };
-      state = {
-        ...state,
-        currentStreak: goalForToday.countedInStreak ? state.currentStreak : state.currentStreak + 1,
-        lastProcessedDate: todayDateKey,
-        goals: {
-          ...state.goals,
-          [todayDateKey]: updatedGoal,
-        },
-      };
+    if (goalForToday) {
+      const goalCompletedToday =
+        goalForToday.targetMinutes > 0 && productive >= goalForToday.targetMinutes;
+
+      if (goalCompletedToday) {
+        const alreadyCompleted = goalForToday.completed;
+        const rewardGranted = goalForToday.rewardGranted;
+        const countedInStreak = goalForToday.countedInStreak;
+
+        if (!alreadyCompleted || !rewardGranted || !countedInStreak) {
+          const updatedGoal = {
+            ...goalForToday,
+            completed: true,
+            countedInStreak: true,
+            rewardGranted: true,
+          };
+
+          let updatedCurrency = state.currency;
+          if (!rewardGranted) {
+            updatedCurrency += GOAL_REWARD;
+          }
+
+          let updatedStreak = state.currentStreak;
+          if (!countedInStreak) {
+            updatedStreak += 1;
+          }
+
+          state = {
+            ...state,
+            currentStreak: updatedStreak,
+            lastProcessedDate: todayDateKey,
+            currency: updatedCurrency,
+            goals: {
+              ...state.goals,
+              [todayDateKey]: updatedGoal,
+            },
+          };
+          mutated = true;
+        }
+      }
+    }
+
+    const achievementsResult = ensureAchievementsUpToDate(state, now);
+    if (achievementsResult.changed) {
+      state = achievementsResult.state;
       mutated = true;
     }
 
