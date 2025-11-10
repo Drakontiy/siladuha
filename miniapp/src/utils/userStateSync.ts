@@ -1,5 +1,6 @@
 import { DayActivity } from '../types';
 import { HomeState, DEFAULT_HOME_STATE } from '../types/home';
+import { DEFAULT_SOCIAL_STATE, SocialState } from '../types/social';
 import { DEFAULT_USER_ID, getActiveUser, getUserScopedStorageKey } from './userIdentity';
 
 type ActivityData = Record<string, DayActivity>;
@@ -14,6 +15,11 @@ const SYNC_DEBOUNCE_MS = 1_000;
 
 let activityData: ActivityData = {};
 let homeState: HomeState = { ...DEFAULT_HOME_STATE, goals: { ...DEFAULT_HOME_STATE.goals } };
+let socialState: SocialState = {
+  friends: [],
+  friendRequests: [],
+  notifications: [],
+};
 let syncStatus: SyncStatus = {
   isSyncing: false,
   lastSyncedAt: null,
@@ -33,6 +39,17 @@ const cloneHomeState = (state: HomeState): HomeState => ({
   lastProcessedDate: state.lastProcessedDate,
   goals: { ...state.goals },
 });
+
+const cloneSocialState = (state: SocialState): SocialState => ({
+  friends: state.friends.map((friend) => ({ ...friend })),
+  friendRequests: state.friendRequests.map((request) => ({ ...request })),
+  notifications: state.notifications.map((notification) => ({
+    ...notification,
+    payload: notification.payload ? { ...notification.payload } : undefined,
+  })),
+});
+
+socialState = cloneSocialState(DEFAULT_SOCIAL_STATE);
 
 const notifyListeners = () => {
   listeners.forEach((listener) => {
@@ -115,6 +132,7 @@ const performSync = async () => {
       body: JSON.stringify({
         activityData,
         homeState,
+        social: socialState,
       }),
     });
 
@@ -125,6 +143,7 @@ const performSync = async () => {
     const payload = (await response.json()) as {
       activityData?: ActivityData;
       homeState?: HomeState;
+      social?: SocialState;
       updatedAt?: string;
     };
 
@@ -135,6 +154,10 @@ const performSync = async () => {
     if (payload.homeState) {
       homeState = cloneHomeState(payload.homeState);
       writeLocalJson('home_state', homeState);
+    }
+    if (payload.social) {
+      socialState = cloneSocialState(payload.social);
+      writeLocalJson('social_state', socialState);
     }
 
     updateSyncStatus({
@@ -184,6 +207,7 @@ export const initializeUserStateSync = async (): Promise<void> => {
   homeState = cloneHomeState(
     readLocalJson<HomeState>('home_state', { ...DEFAULT_HOME_STATE, goals: { ...DEFAULT_HOME_STATE.goals } }),
   );
+  socialState = cloneSocialState(readLocalJson<SocialState>('social_state', { ...DEFAULT_SOCIAL_STATE }));
 
   if (activeUserId === DEFAULT_USER_ID) {
     initialized = true;
@@ -200,6 +224,7 @@ export const initializeUserStateSync = async (): Promise<void> => {
       const payload = (await response.json()) as {
         activityData?: ActivityData;
         homeState?: HomeState;
+        social?: SocialState;
         updatedAt?: string;
       };
 
@@ -210,6 +235,10 @@ export const initializeUserStateSync = async (): Promise<void> => {
       if (payload.homeState) {
         homeState = cloneHomeState(payload.homeState);
         writeLocalJson('home_state', homeState);
+      }
+      if (payload.social) {
+        socialState = cloneSocialState(payload.social);
+        writeLocalJson('social_state', socialState);
       }
 
       updateSyncStatus({
@@ -251,6 +280,15 @@ export const setHomeState = (state: HomeState): void => {
   notifyStateChange();
 };
 
+export const getSocialState = (): SocialState => cloneSocialState(socialState);
+
+export const setSocialState = (state: SocialState): void => {
+  socialState = cloneSocialState(state);
+  writeLocalJson('social_state', socialState);
+  scheduleSync();
+  notifyStateChange();
+};
+
 export const subscribeToSyncStatus = (listener: (status: SyncStatus) => void): (() => void) => {
   listeners.add(listener);
   listener({ ...syncStatus });
@@ -278,5 +316,9 @@ export const subscribeToUserStateChanges = (listener: () => void): (() => void) 
     stateListeners.delete(listener);
   };
 };
+
+export const getApiBaseUrl = (): string => getApiBase();
+
+export const buildApiUrl = (path: string): string => buildEndpoint(path);
 
 

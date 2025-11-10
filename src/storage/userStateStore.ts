@@ -36,9 +36,48 @@ export interface StoredHomeState {
   goals: Record<string, StoredDailyGoalState>;
 }
 
+export type StoredFriendRequestStatus = 'pending' | 'accepted' | 'declined';
+
+export interface StoredFriend {
+  userId: string;
+  displayName?: string | null;
+  shareMyStatsWith: boolean;
+  shareTheirStatsWithMe: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StoredFriendRequest {
+  id: string;
+  counterpartId: string;
+  counterpartName?: string | null;
+  direction: 'incoming' | 'outgoing';
+  status: StoredFriendRequestStatus;
+  createdAt: string;
+  respondedAt?: string | null;
+}
+
+export type StoredNotificationType = 'friend_request' | 'friend_request_accepted' | 'friend_request_declined';
+
+export interface StoredNotification {
+  id: string;
+  type: StoredNotificationType;
+  message: string;
+  createdAt: string;
+  read: boolean;
+  payload?: Record<string, unknown>;
+}
+
+export interface StoredSocialState {
+  friends: StoredFriend[];
+  friendRequests: StoredFriendRequest[];
+  notifications: StoredNotification[];
+}
+
 export interface StoredUserState {
   activityData: Record<string, StoredDayActivity>;
   homeState: StoredHomeState;
+  social: StoredSocialState;
   updatedAt: string;
 }
 
@@ -50,9 +89,16 @@ export const DEFAULT_HOME_STATE: StoredHomeState = {
   goals: {},
 };
 
+export const DEFAULT_SOCIAL_STATE: StoredSocialState = {
+  friends: [],
+  friendRequests: [],
+  notifications: [],
+};
+
 export const DEFAULT_USER_STATE: StoredUserState = {
   activityData: {},
   homeState: DEFAULT_HOME_STATE,
+  social: DEFAULT_SOCIAL_STATE,
   updatedAt: new Date(0).toISOString(),
 };
 
@@ -143,11 +189,119 @@ const sanitizeHomeState = (input: unknown): StoredHomeState => {
   };
 };
 
+const sanitizeFriend = (input: unknown): StoredFriend => {
+  if (!input || typeof input !== 'object') {
+    const now = new Date().toISOString();
+    return {
+      userId: '',
+      displayName: null,
+      shareMyStatsWith: false,
+      shareTheirStatsWithMe: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  const source = input as Partial<StoredFriend>;
+  const now = new Date().toISOString();
+
+  return {
+    userId: typeof source.userId === 'string' ? source.userId : '',
+    displayName: typeof source.displayName === 'string' ? source.displayName : null,
+    shareMyStatsWith: typeof source.shareMyStatsWith === 'boolean' ? source.shareMyStatsWith : false,
+    shareTheirStatsWithMe:
+      typeof source.shareTheirStatsWithMe === 'boolean' ? source.shareTheirStatsWithMe : false,
+    createdAt: typeof source.createdAt === 'string' ? source.createdAt : now,
+    updatedAt: typeof source.updatedAt === 'string' ? source.updatedAt : now,
+  };
+};
+
+const sanitizeFriendRequest = (input: unknown): StoredFriendRequest => {
+  if (!input || typeof input !== 'object') {
+    return {
+      id: '',
+      counterpartId: '',
+      counterpartName: null,
+      direction: 'incoming',
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      respondedAt: null,
+    };
+  }
+
+  const source = input as Partial<StoredFriendRequest>;
+  const direction = source.direction === 'outgoing' ? 'outgoing' : 'incoming';
+  const status: StoredFriendRequestStatus =
+    source.status === 'accepted' || source.status === 'declined' ? source.status : 'pending';
+
+  return {
+    id: typeof source.id === 'string' ? source.id : '',
+    counterpartId: typeof source.counterpartId === 'string' ? source.counterpartId : '',
+    counterpartName: typeof source.counterpartName === 'string' ? source.counterpartName : null,
+    direction,
+    status,
+    createdAt: typeof source.createdAt === 'string' ? source.createdAt : new Date().toISOString(),
+    respondedAt: typeof source.respondedAt === 'string' ? source.respondedAt : null,
+  };
+};
+
+const sanitizeNotification = (input: unknown): StoredNotification => {
+  if (!input || typeof input !== 'object') {
+    return {
+      id: '',
+      type: 'friend_request',
+      message: '',
+      createdAt: new Date().toISOString(),
+      read: false,
+      payload: undefined,
+    };
+  }
+
+  const source = input as Partial<StoredNotification>;
+  const type: StoredNotificationType =
+    source.type === 'friend_request_accepted' || source.type === 'friend_request_declined'
+      ? source.type
+      : 'friend_request';
+
+  const payload =
+    source.payload && typeof source.payload === 'object' ? (source.payload as Record<string, unknown>) : undefined;
+
+  return {
+    id: typeof source.id === 'string' ? source.id : '',
+    type,
+    message: typeof source.message === 'string' ? source.message : '',
+    createdAt: typeof source.createdAt === 'string' ? source.createdAt : new Date().toISOString(),
+    read: typeof source.read === 'boolean' ? source.read : false,
+    payload,
+  };
+};
+
+const sanitizeSocialState = (input: unknown): StoredSocialState => {
+  if (!input || typeof input !== 'object') {
+    return { ...DEFAULT_SOCIAL_STATE };
+  }
+
+  const source = input as Partial<StoredSocialState>;
+
+  const friendsSource = Array.isArray(source.friends) ? source.friends : [];
+  const friendRequestsSource = Array.isArray(source.friendRequests) ? source.friendRequests : [];
+  const notificationsSource = Array.isArray(source.notifications) ? source.notifications : [];
+
+  return {
+    friends: friendsSource.map((friend) => sanitizeFriend(friend)).filter((friend) => friend.userId),
+    friendRequests: friendRequestsSource
+      .map((request) => sanitizeFriendRequest(request))
+      .filter((request) => request.id && request.counterpartId),
+    notifications: notificationsSource.map((notification) => sanitizeNotification(notification)),
+  };
+};
+
 const sanitizeUserState = (input: unknown): StoredUserState => {
   if (!input || typeof input !== 'object') {
     return {
       activityData: {},
       homeState: { ...DEFAULT_HOME_STATE },
+      social: { ...DEFAULT_SOCIAL_STATE },
       updatedAt: new Date().toISOString(),
     };
   }
@@ -157,6 +311,7 @@ const sanitizeUserState = (input: unknown): StoredUserState => {
   return {
     activityData: sanitizeActivityData(source.activityData),
     homeState: sanitizeHomeState(source.homeState),
+    social: sanitizeSocialState(source.social),
     updatedAt: typeof source.updatedAt === 'string' ? source.updatedAt : new Date().toISOString(),
   };
 };
@@ -178,6 +333,7 @@ export const readUserState = async (userId: string): Promise<StoredUserState> =>
       return {
         activityData: {},
         homeState: { ...DEFAULT_HOME_STATE },
+        social: { ...DEFAULT_SOCIAL_STATE },
         updatedAt: new Date(0).toISOString(),
       };
     }

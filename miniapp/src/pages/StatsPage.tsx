@@ -2,10 +2,17 @@ import React, { useEffect, useMemo, useState } from 'react';
 import './StatsPage.css';
 import { formatDate, getStartOfDay, addDays } from '../utils/dateUtils';
 import CalendarModal from '../components/CalendarModal';
-import { getActivityState, subscribeToUserStateChanges } from '../utils/userStateSync';
+import {
+  getActivityState,
+  getSocialState,
+  subscribeToUserStateChanges,
+} from '../utils/userStateSync';
+import { fetchSharedActivity } from '../utils/friendsApi';
 import { DayActivity, ActivityType, TimeMark } from '../types';
 import { DAY_MINUTES } from '../utils/constants';
 import ActivityPieChart, { ActivityPieChartEntry } from '../components/ActivityPieChart';
+import { DEFAULT_USER_ID, getActiveUser } from '../utils/userIdentity';
+import { Friend, SocialState } from '../types/social';
 
 const RANGE_STORAGE_KEY = 'stats_period_range';
 
@@ -46,10 +53,21 @@ const StatsPage: React.FC = () => {
   const [endDate, setEndDate] = useState<Date>(initialRange.end);
   const [calendarMode, setCalendarMode] = useState<'start' | 'end' | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
+  const activeUser = getActiveUser();
+  const activeUserId = activeUser.userId ?? DEFAULT_USER_ID;
+  const [socialState, setSocialState] = useState<SocialState>(() => getSocialState());
+  const [selectedUserId, setSelectedUserId] = useState<string>(activeUserId);
+  const [currentActivityState, setCurrentActivityState] = useState<Record<string, DayActivity>>(
+    () => getActivityState(),
+  );
+  const [friendActivityCache, setFriendActivityCache] = useState<Record<string, Record<string, DayActivity>>>({});
+  const [isLoadingShared, setIsLoadingShared] = useState(false);
+  const [sharedError, setSharedError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = subscribeToUserStateChanges(() => {
       setDataVersion((prev) => prev + 1);
+      setSocialState(getSocialState());
     });
     return unsubscribe;
   }, []);
@@ -68,6 +86,105 @@ const StatsPage: React.FC = () => {
   }, [startDate, endDate]);
 
   const activityState = useMemo(() => getActivityState(), [dataVersion]);
+
+  useEffect(() => {
+    if (selectedUserId === activeUserId) {
+      setCurrentActivityState(activityState);
+      setSharedError(null);
+      setIsLoadingShared(false);
+    }
+  }, [selectedUserId, activeUserId, activityState]);
+
+  useEffect(() => {
+    setSelectedUserId(activeUserId);
+  }, [activeUserId]);
+
+  useEffect(() => {
+    if (selectedUserId === activeUserId) {
+      return;
+    }
+    const exists = socialState.friends.some((friend) => friend.userId === selectedUserId);
+    if (!exists) {
+      setSelectedUserId(activeUserId);
+    }
+  }, [selectedUserId, activeUserId, socialState.friends]);
+
+  useEffect(() => {
+    setFriendActivityCache((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const friendId of Object.keys(next)) {
+        const friend = socialState.friends.find((candidate) => candidate.userId === friendId);
+        if (!friend || !friend.shareTheirStatsWithMe) {
+          delete next[friendId];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [socialState.friends]);
+
+  useEffect(() => {
+    if (selectedUserId === activeUserId) {
+      return;
+    }
+
+    const friend = socialState.friends.find((candidate) => candidate.userId === selectedUserId);
+    if (!friend) {
+      setSharedError('Пользователь не найден');
+      setCurrentActivityState({});
+      setIsLoadingShared(false);
+      return;
+    }
+
+    if (!friend.shareTheirStatsWithMe) {
+      setSharedError('Этот пользователь пока не делится своей статистикой');
+      setCurrentActivityState({});
+      setIsLoadingShared(false);
+      return;
+    }
+
+    const cached = friendActivityCache[selectedUserId];
+    if (cached) {
+      setCurrentActivityState(cached);
+      setSharedError(null);
+      setIsLoadingShared(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingShared(true);
+    setSharedError(null);
+
+    void fetchSharedActivity(selectedUserId)
+      .then((activity) => {
+        if (cancelled) {
+          return;
+        }
+        setFriendActivityCache((prev) => ({
+          ...prev,
+          [selectedUserId]: activity,
+        }));
+        setCurrentActivityState(activity);
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        console.error('Failed to load shared activity:', error);
+        setSharedError(error instanceof Error ? error.message : 'Не удалось загрузить статистику друга');
+        setCurrentActivityState({});
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingShared(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedUserId, activeUserId, socialState.friends, friendActivityCache]);
 
   const periodRange = useMemo(() => {
     const rangeStart = clampToToday(startDate, today);
@@ -93,7 +210,7 @@ const StatsPage: React.FC = () => {
     let current = periodRange.start;
     while (current <= periodRange.end) {
       const dateKey = formatDate(current);
-      const activity: DayActivity | undefined = activityState[dateKey];
+      const activity: DayActivity | undefined = currentActivityState[dateKey];
       if (activity) {
         const marks = activity.marks ?? [];
         const marksMap = new Map<string, TimeMark>();
@@ -153,7 +270,19 @@ const StatsPage: React.FC = () => {
       .sort((a, b) => b.minutes - a.minutes);
 
     return { entries, dayCount, totalMinutes };
-  }, [activityState, periodRange, dataVersion]);
+  }, [currentActivityState, periodRange]);
+
+  const availableFriends: Friend[] = useMemo(
+    () =>
+      socialState.friends
+        .slice()
+        .sort((a, b) => (a.displayName || a.userId).localeCompare(b.displayName || b.userId)),
+    [socialState.friends],
+  );
+
+  const handleSelectedUserChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedUserId(event.target.value);
+  };
 
   const openCalendarForBoundary = (mode: 'start' | 'end') => {
     setCalendarMode(mode);
@@ -181,6 +310,35 @@ const StatsPage: React.FC = () => {
         <h2 className="stats-title">Статистика</h2>
       </div>
 
+      <div className="stats-user-selector">
+        <label className="stats-user-selector__label" htmlFor="stats-user-select">
+          Чья статистика
+        </label>
+        <select
+          id="stats-user-select"
+          className="stats-user-selector__select"
+          value={selectedUserId}
+          onChange={handleSelectedUserChange}
+        >
+          <option value={activeUserId}>{(activeUser.name ?? activeUser.username ?? 'Я') + ' (вы)'}</option>
+          {availableFriends.map((friend) => (
+            <option key={friend.userId} value={friend.userId} disabled={!friend.shareTheirStatsWithMe}>
+              {friend.displayName || friend.userId}
+              {!friend.shareTheirStatsWithMe ? ' — нет доступа' : ''}
+            </option>
+          ))}
+        </select>
+        {selectedUserId !== activeUserId && (
+          <div className="stats-user-selector__hint">
+            {isLoadingShared && <span>Загружаем данные друга…</span>}
+            {sharedError && <span className="stats-user-selector__error">{sharedError}</span>}
+            {!isLoadingShared && !sharedError && (
+              <span>Статистика доступна с разрешения друга</span>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="stats-summary">
         <button
           className="stats-summary__item stats-summary__item--interactive"
@@ -199,7 +357,15 @@ const StatsPage: React.FC = () => {
       </div>
 
       <div className="stats-chart-card">
-        {aggregatedData.entries.length > 0 ? (
+        {isLoadingShared ? (
+          <div className="stats-empty">
+            <p>Загружаем данные…</p>
+          </div>
+        ) : sharedError ? (
+          <div className="stats-empty">
+            <p>{sharedError}</p>
+          </div>
+        ) : aggregatedData.entries.length > 0 ? (
           <ActivityPieChart data={aggregatedData.entries} dayCount={aggregatedData.dayCount} />
         ) : (
           <div className="stats-empty">
