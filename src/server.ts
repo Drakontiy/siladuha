@@ -13,6 +13,11 @@ import {
   StoredSocialState,
   StoredUserState,
 } from './storage/userStateStore';
+import {
+  notifyFriendRequestAccepted,
+  notifyFriendRequestCreated,
+  notifyFriendRequestDeclined,
+} from './services/notifications';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -247,6 +252,8 @@ app.post(`${API_BASE_PATH}/user/:userId/friends/request`, async (req, res) => {
 
     await Promise.all([writeUserState(userId, nextRequesterState), writeUserState(targetUserId, nextTargetState)]);
 
+    await notifyFriendRequestCreated(targetUserId, userId, requesterName);
+
     res.setHeader('Cache-Control', 'no-store');
     res.json({
       social: cloneSocialState(requesterSocial),
@@ -387,6 +394,12 @@ app.post(`${API_BASE_PATH}/user/:userId/friends/request/:requestId/respond`, asy
     };
 
     await Promise.all([writeUserState(userId, nextUserState), writeUserState(counterpartId, nextCounterpartState)]);
+
+    if (actionRaw === 'accept') {
+      await notifyFriendRequestAccepted(counterpartId, userId, responderName ?? null);
+    } else {
+      await notifyFriendRequestDeclined(counterpartId, userId, responderName ?? null);
+    }
 
     res.setHeader('Cache-Control', 'no-store');
     res.json({
