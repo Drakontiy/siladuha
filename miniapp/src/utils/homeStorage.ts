@@ -297,15 +297,38 @@ const getNextCosmeticLevelInfo = (
 
 const mutateHomeState = (
   mutator: (draft: HomeState) => { changed: boolean; error?: string },
+  options?: { referenceDate?: Date },
 ): { state: HomeState; changed: boolean; error?: string } => {
-  let state = loadHomeState();
-  const draft = cloneState(state);
+  const referenceDate = options?.referenceDate ?? new Date();
+  const originalState = loadHomeState();
+  const draft = cloneState(originalState);
   const result = mutator(draft);
-  if (result.changed) {
-    saveHomeState(draft);
-    state = draft;
+
+  if (result.error) {
+    return { state: originalState, changed: false, error: result.error };
   }
-  return { state, ...result };
+
+  let finalState = draft;
+  let changed = result.changed;
+
+  const processed = processPendingDays(finalState, referenceDate);
+  finalState = processed.state;
+  if (processed.changed) {
+    changed = true;
+  }
+
+  const ensured = ensureAchievementsUpToDate(finalState, referenceDate);
+  if (ensured.changed) {
+    finalState = ensured.state;
+    changed = true;
+  }
+
+  if (changed) {
+    saveHomeState(finalState);
+    return { state: finalState, changed: true };
+  }
+
+  return { state: originalState, changed: false };
 };
 
 const DEFAULT_STATE: HomeState = cloneState(DEFAULT_HOME_STATE);
@@ -328,27 +351,26 @@ export const saveHomeState = (state: HomeState): void => {
 };
 
 export const setDailyGoal = (date: Date, minutes: number): HomeState => {
-  const todayKey = getDateKey(getStartOfDay(date));
-  const existingState = loadHomeState();
-  if (existingState.goals[todayKey]) {
-    return existingState;
-  }
-  const nextState: HomeState = {
-    ...existingState,
-    goals: {
-      ...existingState.goals,
-      [todayKey]: {
+  const dayStart = getStartOfDay(date);
+  const todayKey = getDateKey(dayStart);
+  const { state } = mutateHomeState(
+    (draft) => {
+      if (draft.goals[todayKey]) {
+        return { changed: false };
+      }
+      draft.goals[todayKey] = {
         targetMinutes: minutes,
         completed: false,
         countedInStreak: false,
         rewardGranted: false,
         productiveRewardedHours: 0,
         setAt: new Date().toISOString(),
-      },
+      };
+      return { changed: true };
     },
-  };
-  saveHomeState(nextState);
-  return nextState;
+    { referenceDate: new Date() },
+  );
+  return state;
 };
 
 const calculateActivityMinutes = (date: Date, activityType: Exclude<ActivityType, null>): number => {
