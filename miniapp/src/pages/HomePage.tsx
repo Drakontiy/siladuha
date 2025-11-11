@@ -56,7 +56,11 @@ const formatDuration = (totalMinutes: number): string => {
   return parts.join(' ');
 };
 
-const HomePage: React.FC = () => {
+interface HomePageProps {
+  maintenanceToken?: number;
+}
+
+const HomePage: React.FC<HomePageProps> = ({ maintenanceToken = 0 }) => {
   const [homeState, setHomeState] = useState(() => {
     const initialState = loadHomeState();
     const { state: processedState, changed } = processPendingDays(initialState, new Date());
@@ -125,7 +129,7 @@ const HomePage: React.FC = () => {
       window.clearInterval(intervalId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [updateHomeData]);
+  }, [updateHomeData, maintenanceToken]);
 
   const handleGoalButtonClick = () => {
     if (todayGoal) {
