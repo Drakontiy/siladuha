@@ -5,8 +5,8 @@ import {
   GOAL_REWARD,
   calculateProductiveMinutes,
   ensureAchievementsUpToDate,
-  getHomeBackgroundColor,
   getHomeBackgroundOptions,
+  getHomeBackgroundStyle,
   getHomeBackgroundThemesConfig,
   getNextHomeBackgroundLevelCost,
   loadHomeState,
@@ -216,7 +216,19 @@ const HomePage: React.FC = () => {
   const streakImage = homeState.currentStreak > 0 ? 'media/happy1.svg' : 'media/sad.svg';
   const streakImageAlt = homeState.currentStreak > 0 ? 'Отличное настроение' : 'Пора собраться';
 
-  const backgroundColor = useMemo(() => getHomeBackgroundColor(homeState), [homeState]);
+  const backgroundStyleDef = useMemo(() => getHomeBackgroundStyle(homeState), [homeState]);
+  const homePageStyle = useMemo<React.CSSProperties>(() => {
+    if (backgroundStyleDef.kind === 'color') {
+      return { backgroundColor: backgroundStyleDef.color };
+    }
+    return {
+      backgroundColor: '#0f172a',
+      backgroundImage: `url(${backgroundStyleDef.src})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+    };
+  }, [backgroundStyleDef]);
   const backgroundOptions = useMemo(() => getHomeBackgroundOptions(homeState), [homeState]);
   const currency = homeState.currency;
   const themeConfig = useMemo(() => getHomeBackgroundThemesConfig(), []);
@@ -228,33 +240,38 @@ const HomePage: React.FC = () => {
     const groups = new Map<AchievementKey, HomeCustomizationItem['levels']>();
     unlockedOptions.forEach((option) => {
       const key = option.source as AchievementKey;
+      if (!option.style) {
+        return;
+      }
       if (!groups.has(key)) {
         groups.set(key, []);
       }
       groups.get(key)!.push({
         level: option.level,
-        color: option.color ?? '#E2E8F0',
+        preview: option.style,
         selected: option.selected,
       });
     });
 
-    return Array.from(groups.entries()).map(([key, levels]) => {
-      const theme = themeConfig[key];
-      const sortedLevels = levels.sort((a, b) => a.level - b.level);
-      const nextLevelInfo = getNextHomeBackgroundLevelCost(homeState, key);
-      return {
-        key,
-        title: theme.title,
-        description: theme.description,
-        levels: sortedLevels,
-        nextLevelCost: nextLevelInfo?.cost,
-        hasMoreLevels: !!nextLevelInfo,
-      };
-    });
+    return Array.from(groups.entries())
+      .map(([key, levels]) => {
+        const theme = themeConfig[key];
+        const sortedLevels = levels.sort((a, b) => a.level - b.level);
+        const nextLevelInfo = getNextHomeBackgroundLevelCost(homeState, key);
+        return {
+          key,
+          title: theme.title,
+          description: theme.description,
+          levels: sortedLevels,
+          nextLevelCost: nextLevelInfo?.cost,
+          hasMoreLevels: !!nextLevelInfo,
+        };
+      })
+      .filter((item) => item.levels.length > 0);
   }, [unlockedOptions, homeState, themeConfig]);
 
   return (
-    <div className="home-page" style={{ backgroundColor }}>
+    <div className="home-page" style={homePageStyle}>
       <div className="home-header">
         <h2 className="home-title">Вы в ударе {homeState.currentStreak} {streakWord}</h2>
         {!todayGoal && (

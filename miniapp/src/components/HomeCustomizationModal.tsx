@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import './HomeCustomizationModal.css';
 import { AchievementKey } from '../types/home';
 import {
+  HomeBackgroundStyle,
   purchaseHomeBackgroundLevel,
   setActiveHomeBackground,
 } from '../utils/homeStorage';
@@ -10,10 +11,23 @@ export interface HomeCustomizationItem {
   key: AchievementKey;
   title: string;
   description: string;
-  levels: Array<{ level: number; color: string; selected: boolean }>;
+  levels: Array<{ level: number; preview: HomeBackgroundStyle; selected: boolean }>;
   nextLevelCost?: number;
   hasMoreLevels: boolean;
 }
+
+const getPreviewStyle = (preview: HomeBackgroundStyle): React.CSSProperties =>
+  preview.kind === 'color'
+    ? {
+        backgroundColor: preview.color,
+      }
+    : {
+        backgroundImage: `url(${preview.src})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundColor: '#0f172a',
+      };
 
 interface HomeCustomizationModalProps {
   items: HomeCustomizationItem[];
@@ -91,7 +105,10 @@ const HomeCustomizationModal: React.FC<HomeCustomizationModalProps> = ({
               <div className="home-modal__empty">Выполните достижения, чтобы получить доступ к кастомизации.</div>
             ) : (
               items.map((item) => {
-                const firstColor = item.levels[0]?.color ?? '#E2E8F0';
+                const firstPreview = item.levels[0]?.preview;
+                const previewStyle = firstPreview
+                  ? getPreviewStyle(firstPreview)
+                  : { backgroundColor: '#E2E8F0' };
                 return (
                   <button
                     key={item.key}
@@ -101,7 +118,7 @@ const HomeCustomizationModal: React.FC<HomeCustomizationModalProps> = ({
                   >
                     <span
                       className="home-modal__achievement-preview"
-                      style={{ backgroundColor: firstColor }}
+                      style={previewStyle}
                     />
                     <span className="home-modal__achievement-title">{item.title}</span>
                   </button>
@@ -116,18 +133,21 @@ const HomeCustomizationModal: React.FC<HomeCustomizationModalProps> = ({
               <p className="home-modal__details-description">{activeItem.description}</p>
 
               <div className="home-modal__swatch-group">
-                {activeItem.levels.map((level) => (
-                  <button
-                    key={level.level}
-                    type="button"
-                    className={`home-modal__swatch ${level.selected ? 'home-modal__swatch--active' : ''}`}
-                    style={{ backgroundColor: level.color }}
-                    onClick={() => handleSelectLevel(activeItem.key, level.level)}
-                  >
-                    <span className="home-modal__swatch-level">{level.level}</span>
-                    {level.selected && <span className="home-modal__swatch-check">✓</span>}
-                  </button>
-                ))}
+                {activeItem.levels.map((level) => {
+                  const swatchStyle = getPreviewStyle(level.preview);
+                  return (
+                    <button
+                      key={level.level}
+                      type="button"
+                      className={`home-modal__swatch ${level.selected ? 'home-modal__swatch--active' : ''}`}
+                      style={swatchStyle}
+                      onClick={() => handleSelectLevel(activeItem.key, level.level)}
+                    >
+                      <span className="home-modal__swatch-level">{level.level}</span>
+                      {level.selected && <span className="home-modal__swatch-check">✓</span>}
+                    </button>
+                  );
+                })}
               </div>
 
               {error && <div className="home-modal__error">{error}</div>}

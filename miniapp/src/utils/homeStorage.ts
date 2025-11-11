@@ -24,29 +24,45 @@ const SLEEP_WEEK_MINUTES = 56 * 60;
 
 export const GOAL_REWARD = GOAL_REWARD_AMOUNT;
 
+export type ThemeLevelDefinition =
+  | { kind: 'color'; value: string }
+  | { kind: 'image'; value: string };
+
 const HOME_BACKGROUND_THEMES: Record<
   AchievementKey,
   {
-    colors: string[];
+    levels: ThemeLevelDefinition[];
     baseCost: number;
     title: string;
     description: string;
   }
 > = {
   firstGoalCompleted: {
-    colors: ['#F5F3FF', '#EDE9FE', '#DDD6FE'],
+    levels: [
+      { kind: 'color', value: '#F5F3FF' },
+      { kind: 'color', value: '#EDE9FE' },
+      { kind: 'color', value: '#DDD6FE' },
+    ],
     baseCost: 150,
     title: 'Первый шаг',
     description: 'Награда за первую выполненную цель — мягкие сиреневые оттенки.',
   },
   focusEightHours: {
-    colors: ['#ECFDF5', '#D1FAE5', '#A7F3D0'],
+    levels: [
+      { kind: 'color', value: '#ECFDF5' },
+      { kind: 'color', value: '#D1FAE5' },
+      { kind: 'color', value: '#A7F3D0' },
+    ],
     baseCost: 220,
     title: '8 часов фокуса',
     description: 'Зелёные оттенки фокуса за день продуктивной работы.',
   },
   sleepSevenNights: {
-    colors: ['#EEF2FF', '#E0E7FF', '#C7D2FE'],
+    levels: [
+      { kind: 'image', value: 'media/night.svg' },
+      { kind: 'color', value: '#E0E7FF' },
+      { kind: 'color', value: '#C7D2FE' },
+    ],
     baseCost: 200,
     title: 'Герой сна',
     description: 'Глубокие вечерние тона за полноценный отдых.',
@@ -125,9 +141,12 @@ const cloneState = (state: HomeState): HomeState => ({
 
 const getThemeForAchievement = (key: AchievementKey) => HOME_BACKGROUND_THEMES[key];
 
-const getColorForThemeLevel = (key: AchievementKey, level: number): string | null => {
+const getThemeLevelDefinition = (key: AchievementKey, level: number): ThemeLevelDefinition | null => {
   const theme = getThemeForAchievement(key);
-  return theme?.colors[level - 1] ?? null;
+  if (!theme) {
+    return null;
+  }
+  return theme.levels[level - 1] ?? null;
 };
 
 const ensureCosmeticProgressForAchievement = (state: HomeState, key: AchievementKey): boolean => {
@@ -145,7 +164,7 @@ const ensureCosmeticProgressForAchievement = (state: HomeState, key: Achievement
     changed = true;
   }
 
-  const maxLevels = theme.colors.length;
+  const maxLevels = theme.levels.length;
   if (existing.levelsUnlocked > maxLevels) {
     existing.levelsUnlocked = maxLevels;
     changed = true;
@@ -177,7 +196,7 @@ const normalizeActiveHomeBackground = (state: HomeState): boolean => {
     if (level < 1 || level > progress.levelsUnlocked) {
       return false;
     }
-    return !!getColorForThemeLevel(source, level);
+    return !!getThemeLevelDefinition(source, level);
   };
 
   if (active) {
@@ -223,20 +242,21 @@ const getProgressForAchievement = (
 const getNextHomeBackgroundLevel = (
   state: HomeState,
   key: AchievementKey,
-): { level: number; cost: number; color: string } | null => {
+): { level: number; cost: number; definition: ThemeLevelDefinition } | null => {
   const progress = getProgressForAchievement(state, key);
   if (!progress || !state.achievements[key]?.unlocked) {
     return null;
   }
   const theme = getThemeForAchievement(key);
   const nextLevel = progress.levelsUnlocked + 1;
-  if (nextLevel > theme.colors.length) {
+  if (nextLevel > theme.levels.length) {
     return null;
   }
+  const definition = theme.levels[nextLevel - 1];
   return {
     level: nextLevel,
     cost: theme.baseCost * nextLevel,
-    color: theme.colors[nextLevel - 1],
+    definition,
   };
 };
 
@@ -487,12 +507,24 @@ export const ensureAchievementsUpToDate = (
   return cosmeticsChanged ? { state: cloned, changed: true } : { state, changed: false };
 };
 
-export const getHomeBackgroundColor = (state: HomeState): string => {
+export type HomeBackgroundStyle =
+  | { kind: 'color'; color: string }
+  | { kind: 'image'; src: string };
+
+const definitionToStyle = (definition: ThemeLevelDefinition): HomeBackgroundStyle =>
+  definition.kind === 'color'
+    ? { kind: 'color', color: definition.value }
+    : { kind: 'image', src: definition.value };
+
+export const getHomeBackgroundStyle = (state: HomeState): HomeBackgroundStyle => {
   const selection = state.cosmetics.homeBackground.activeSelection;
-  if (!selection) {
-    return HOME_BACKGROUND_DEFAULT_COLOR;
+  if (selection) {
+    const definition = getThemeLevelDefinition(selection.source, selection.level);
+    if (definition) {
+      return definitionToStyle(definition);
+    }
   }
-  return getColorForThemeLevel(selection.source, selection.level) ?? HOME_BACKGROUND_DEFAULT_COLOR;
+  return { kind: 'color', color: HOME_BACKGROUND_DEFAULT_COLOR };
 };
 
 export interface HomeBackgroundOption {
@@ -500,7 +532,7 @@ export interface HomeBackgroundOption {
   level: number;
   unlocked: boolean;
   selected: boolean;
-  color: string | null;
+  style: HomeBackgroundStyle | null;
   purchasable: boolean;
   cost?: number;
 }
@@ -513,10 +545,12 @@ export const getHomeBackgroundOptions = (state: HomeState): HomeBackgroundOption
     const theme = getThemeForAchievement(key);
     const progress = state.cosmetics.homeBackground.byAchievement[key];
     const levelsUnlocked = progress?.levelsUnlocked ?? 0;
-    const nextInfo = getNextHomeBackgroundLevel(state, key);
-    for (let level = 1; level <= theme.colors.length; level += 1) {
+    const nextInfo = getNextHomeBackgroundLevelCost(state, key);
+    for (let level = 1; level <= theme.levels.length; level += 1) {
       const unlocked = level <= levelsUnlocked;
       const selected = active?.source === key && active.level === level;
+      const definition = unlocked ? getThemeLevelDefinition(key, level) : null;
+      const style = definition ? definitionToStyle(definition) : null;
       const purchasable =
         !unlocked &&
         !!progress &&
@@ -527,7 +561,7 @@ export const getHomeBackgroundOptions = (state: HomeState): HomeBackgroundOption
         level,
         unlocked,
         selected,
-        color: unlocked ? theme.colors[level - 1] : null,
+        style,
         purchasable,
         cost: purchasable ? nextInfo?.cost : undefined,
       });
@@ -579,7 +613,7 @@ export const setActiveHomeBackground = (
     if (!progress || level < 1 || level > progress.levelsUnlocked) {
       return { changed: false, error: 'level_locked' };
     }
-    if (!getColorForThemeLevel(source, level)) {
+    if (!getThemeLevelDefinition(source, level)) {
       return { changed: false, error: 'invalid_level' };
     }
     draft.cosmetics.homeBackground.activeSelection = { source, level };
