@@ -10,6 +10,7 @@ import {
   HomeCosmeticsState,
   AchievementKey,
   CosmeticThemeProgress,
+  CosmeticCategory,
 } from '../types/home';
 import { getHomeState as getSyncedHomeState, setHomeState as setSyncedHomeState } from './userStateSync';
 
@@ -28,9 +29,10 @@ export type ThemeLevelDefinition =
   | { kind: 'color'; value: string }
   | { kind: 'image'; value: string };
 
-const HOME_BACKGROUND_THEMES: Record<
+const ACHIEVEMENT_THEME_CONFIG: Record<
   AchievementKey,
   {
+    category: CosmeticCategory;
     levels: ThemeLevelDefinition[];
     baseCost: number;
     title: string;
@@ -38,16 +40,16 @@ const HOME_BACKGROUND_THEMES: Record<
   }
 > = {
   firstGoalCompleted: {
+    category: 'hats',
     levels: [
-      { kind: 'color', value: '#F5F3FF' },
-      { kind: 'color', value: '#EDE9FE' },
-      { kind: 'color', value: '#DDD6FE' },
+      { kind: 'image', value: 'images/hat.svg' },
     ],
     baseCost: 150,
     title: 'Первый шаг',
-    description: 'Награда за первую выполненную цель — мягкие сиреневые оттенки.',
+    description: 'Элегантная шляпа за первую выполненную цель.',
   },
   focusEightHours: {
+    category: 'backgrounds',
     levels: [
       { kind: 'color', value: '#ECFDF5' },
       { kind: 'color', value: '#D1FAE5' },
@@ -58,6 +60,7 @@ const HOME_BACKGROUND_THEMES: Record<
     description: 'Зелёные оттенки фокуса за день продуктивной работы.',
   },
   sleepSevenNights: {
+    category: 'backgrounds',
     levels: [
       { kind: 'image', value: 'media/night.svg' },
       { kind: 'color', value: '#E0E7FF' },
@@ -70,7 +73,8 @@ const HOME_BACKGROUND_THEMES: Record<
 };
 
 const HOME_BACKGROUND_DEFAULT_COLOR = '#F3F4F6';
-const ACHIEVEMENT_KEYS = Object.keys(HOME_BACKGROUND_THEMES) as AchievementKey[];
+const ACHIEVEMENT_KEYS = Object.keys(ACHIEVEMENT_THEME_CONFIG) as AchievementKey[];
+const COSMETIC_CATEGORIES: CosmeticCategory[] = ['backgrounds', 'hats'];
 
 const cloneAchievementFlag = (flag: AchievementFlag): AchievementFlag => ({
   unlocked: flag.unlocked,
@@ -106,9 +110,11 @@ const cloneCosmeticThemeProgress = (
   };
 };
 
-const cloneCosmetics = (cosmetics: HomeCosmeticsState): HomeCosmeticsState => {
-  const byAchievement: HomeCosmeticsState['homeBackground']['byAchievement'] = {};
-  const sourceMap = cosmetics.homeBackground.byAchievement ?? {};
+const cloneCosmeticCategoryState = (
+  category: HomeCosmeticsState[CosmeticCategory],
+): HomeCosmeticsState[CosmeticCategory] => {
+  const byAchievement: HomeCosmeticsState[CosmeticCategory]['byAchievement'] = {};
+  const sourceMap = category.byAchievement ?? {};
   (Object.keys(sourceMap) as AchievementKey[]).forEach((key) => {
     const cloned = cloneCosmeticThemeProgress(sourceMap[key]);
     if (cloned) {
@@ -116,19 +122,22 @@ const cloneCosmetics = (cosmetics: HomeCosmeticsState): HomeCosmeticsState => {
     }
   });
 
-  const active = cosmetics.homeBackground.activeSelection;
+  const active = category.activeSelection;
   const activeSelection =
     active && typeof active.source === 'string' && typeof active.level === 'number'
       ? { source: active.source, level: active.level }
       : null;
 
   return {
-    homeBackground: {
-      byAchievement,
-      activeSelection,
-    },
+    byAchievement,
+    activeSelection,
   };
 };
+
+const cloneCosmetics = (cosmetics: HomeCosmeticsState): HomeCosmeticsState => ({
+  backgrounds: cloneCosmeticCategoryState(cosmetics.backgrounds),
+  hats: cloneCosmeticCategoryState(cosmetics.hats),
+});
 
 const cloneState = (state: HomeState): HomeState => ({
   currentStreak: state.currentStreak,
@@ -139,7 +148,7 @@ const cloneState = (state: HomeState): HomeState => ({
   cosmetics: cloneCosmetics(state.cosmetics),
 });
 
-const getThemeForAchievement = (key: AchievementKey) => HOME_BACKGROUND_THEMES[key];
+const getThemeForAchievement = (key: AchievementKey) => ACHIEVEMENT_THEME_CONFIG[key];
 
 const getThemeLevelDefinition = (key: AchievementKey, level: number): ThemeLevelDefinition | null => {
   const theme = getThemeForAchievement(key);
@@ -149,12 +158,16 @@ const getThemeLevelDefinition = (key: AchievementKey, level: number): ThemeLevel
   return theme.levels[level - 1] ?? null;
 };
 
+const getCategoryState = (cosmetics: HomeCosmeticsState, category: CosmeticCategory) =>
+  cosmetics[category];
+
 const ensureCosmeticProgressForAchievement = (state: HomeState, key: AchievementKey): boolean => {
   if (!state.achievements[key]?.unlocked) {
     return false;
   }
   const theme = getThemeForAchievement(key);
-  const map = state.cosmetics.homeBackground.byAchievement;
+  const categoryState = getCategoryState(state.cosmetics, theme.category);
+  const map = categoryState.byAchievement;
   const existing = map[key] ?? { levelsUnlocked: 0, currentLevel: 0 };
 
   let changed = false;
@@ -184,12 +197,14 @@ const ensureCosmeticProgressForAchievement = (state: HomeState, key: Achievement
   return changed;
 };
 
-const normalizeActiveHomeBackground = (state: HomeState): boolean => {
-  let changed = false;
-  const active = state.cosmetics.homeBackground.activeSelection;
-
+const normalizeCategoryActiveSelection = (state: HomeState, category: CosmeticCategory): boolean => {
+  const categoryState = getCategoryState(state.cosmetics, category);
   const isValidSelection = (source: AchievementKey, level: number): boolean => {
-    const progress = state.cosmetics.homeBackground.byAchievement[source];
+    const theme = getThemeForAchievement(source);
+    if (!theme || theme.category !== category) {
+      return false;
+    }
+    const progress = categoryState.byAchievement[source];
     if (!progress) {
       return false;
     }
@@ -199,24 +214,38 @@ const normalizeActiveHomeBackground = (state: HomeState): boolean => {
     return !!getThemeLevelDefinition(source, level);
   };
 
+  let changed = false;
+  const active = categoryState.activeSelection;
   if (active) {
     if (!isValidSelection(active.source, active.level)) {
-      state.cosmetics.homeBackground.activeSelection = null;
+      categoryState.activeSelection = null;
       changed = true;
     }
   }
 
-  if (!state.cosmetics.homeBackground.activeSelection) {
-    const fallback = ACHIEVEMENT_KEYS.find((key) =>
-      isValidSelection(key, state.cosmetics.homeBackground.byAchievement[key]?.currentLevel ?? 0),
-    );
+  if (!categoryState.activeSelection) {
+    const unlockedEntries = (
+      Object.entries(categoryState.byAchievement) as Array<[AchievementKey, CosmeticThemeProgress | undefined]>
+    )
+      .filter(([, progress]) => (progress?.levelsUnlocked ?? 0) > 0)
+      .sort(
+        (a, b) =>
+          ACHIEVEMENT_KEYS.indexOf(a[0]) - ACHIEVEMENT_KEYS.indexOf(b[0]),
+      );
+    const fallback = unlockedEntries.find(([key, progress]) => {
+      if (!progress) {
+        return false;
+      }
+      const level = Math.min(progress.currentLevel || 1, progress.levelsUnlocked);
+      return isValidSelection(key, level);
+    });
     if (fallback) {
-      const progress = state.cosmetics.homeBackground.byAchievement[fallback]!;
-      state.cosmetics.homeBackground.activeSelection = {
-        source: fallback,
-        level: Math.min(progress.currentLevel, progress.levelsUnlocked),
-      };
-      changed = true;
+      const [source, progress] = fallback;
+      if (progress) {
+        const level = Math.min(progress.currentLevel || 1, progress.levelsUnlocked);
+        categoryState.activeSelection = { source, level };
+        changed = true;
+      }
     }
   }
 
@@ -230,16 +259,22 @@ const ensureCosmeticsForUnlockedAchievements = (state: HomeState): boolean => {
       changed = ensureCosmeticProgressForAchievement(state, key) || changed;
     }
   });
-  changed = normalizeActiveHomeBackground(state) || changed;
+  COSMETIC_CATEGORIES.forEach((category) => {
+    changed = normalizeCategoryActiveSelection(state, category) || changed;
+  });
   return changed;
 };
 
 const getProgressForAchievement = (
   state: HomeState,
   key: AchievementKey,
-): CosmeticThemeProgress | undefined => state.cosmetics.homeBackground.byAchievement[key];
+): CosmeticThemeProgress | undefined => {
+  const theme = getThemeForAchievement(key);
+  const categoryState = getCategoryState(state.cosmetics, theme.category);
+  return categoryState.byAchievement[key];
+};
 
-const getNextHomeBackgroundLevel = (
+const getNextCosmeticLevelInfo = (
   state: HomeState,
   key: AchievementKey,
 ): { level: number; cost: number; definition: ThemeLevelDefinition } | null => {
@@ -307,6 +342,7 @@ export const setDailyGoal = (date: Date, minutes: number): HomeState => {
         completed: false,
         countedInStreak: false,
         rewardGranted: false,
+        productiveRewardedHours: 0,
         setAt: new Date().toISOString(),
       },
     },
@@ -456,27 +492,54 @@ export const processPendingDays = (
     const targetMinutes = existingGoal?.targetMinutes ?? 0;
     const productiveMinutes = calculateProductiveMinutes(current);
     const completed = targetMinutes > 0 && productiveMinutes >= targetMinutes;
+    const previousRewardGranted = existingGoal?.rewardGranted ?? false;
+    const previousCountedInStreak = existingGoal?.countedInStreak ?? false;
+    const previousRewardedHours = existingGoal?.productiveRewardedHours ?? 0;
 
-    let rewardGranted = existingGoal?.rewardGranted ?? false;
-    if (completed && !rewardGranted) {
-      nextState.currency += GOAL_REWARD_AMOUNT;
-      rewardGranted = true;
+    const productiveHours = Math.floor(productiveMinutes / 60);
+
+    if (productiveHours > previousRewardedHours) {
+      const delta = productiveHours - previousRewardedHours;
+      nextState.currency += delta * 10;
       currencyChanged = true;
+    } else if (productiveHours < previousRewardedHours) {
+      const delta = previousRewardedHours - productiveHours;
+      const deduction = delta * 10;
+      if (deduction > 0) {
+        const adjustedCurrency = Math.max(0, nextState.currency - deduction);
+        if (adjustedCurrency !== nextState.currency) {
+          nextState.currency = adjustedCurrency;
+          currencyChanged = true;
+        }
+      }
     }
 
+    let rewardGranted = previousRewardGranted;
+    let countedInStreak = previousCountedInStreak;
     if (targetMinutes > 0) {
       if (completed) {
-        currentStreak = existingGoal?.countedInStreak ? currentStreak : currentStreak + 1;
+        if (!previousCountedInStreak) {
+          currentStreak += 1;
+          countedInStreak = true;
+        }
+        if (!rewardGranted) {
+          const streakReward = Math.min(currentStreak, 7) * GOAL_REWARD;
+          nextState.currency += streakReward;
+          rewardGranted = true;
+          currencyChanged = true;
+        }
       } else {
         currentStreak = 0;
+        countedInStreak = true;
       }
     }
 
     nextState.goals[key] = {
       targetMinutes,
       completed,
-      countedInStreak: true,
+      countedInStreak,
       rewardGranted,
+      productiveRewardedHours: productiveHours,
       setAt: existingGoal?.setAt ?? current.toISOString(),
     };
 
@@ -507,45 +570,58 @@ export const ensureAchievementsUpToDate = (
   return cosmeticsChanged ? { state: cloned, changed: true } : { state, changed: false };
 };
 
-export type HomeBackgroundStyle =
+export type CosmeticStyle =
   | { kind: 'color'; color: string }
   | { kind: 'image'; src: string };
 
-const definitionToStyle = (definition: ThemeLevelDefinition): HomeBackgroundStyle =>
+const definitionToStyle = (definition: ThemeLevelDefinition): CosmeticStyle =>
   definition.kind === 'color'
     ? { kind: 'color', color: definition.value }
     : { kind: 'image', src: definition.value };
 
-export const getHomeBackgroundStyle = (state: HomeState): HomeBackgroundStyle => {
-  const selection = state.cosmetics.homeBackground.activeSelection;
-  if (selection) {
-    const definition = getThemeLevelDefinition(selection.source, selection.level);
-    if (definition) {
-      return definitionToStyle(definition);
-    }
+export const getActiveCosmeticStyle = (state: HomeState, category: CosmeticCategory): CosmeticStyle | null => {
+  const categoryState = getCategoryState(state.cosmetics, category);
+  const selection = categoryState.activeSelection;
+  if (!selection) {
+    return category === 'backgrounds' ? { kind: 'color', color: HOME_BACKGROUND_DEFAULT_COLOR } : null;
   }
-  return { kind: 'color', color: HOME_BACKGROUND_DEFAULT_COLOR };
+  const definition = getThemeLevelDefinition(selection.source, selection.level);
+  if (!definition) {
+    return category === 'backgrounds' ? { kind: 'color', color: HOME_BACKGROUND_DEFAULT_COLOR } : null;
+  }
+  return definitionToStyle(definition);
 };
 
-export interface HomeBackgroundOption {
+export const getHomeBackgroundStyle = (state: HomeState): CosmeticStyle =>
+  getActiveCosmeticStyle(state, 'backgrounds') ?? { kind: 'color', color: HOME_BACKGROUND_DEFAULT_COLOR };
+
+export const getHomeHatStyle = (state: HomeState): CosmeticStyle | null =>
+  getActiveCosmeticStyle(state, 'hats');
+
+export interface CosmeticOption {
+  category: CosmeticCategory;
   source: AchievementKey;
   level: number;
   unlocked: boolean;
   selected: boolean;
-  style: HomeBackgroundStyle | null;
+  style: CosmeticStyle | null;
   purchasable: boolean;
   cost?: number;
 }
 
-export const getHomeBackgroundOptions = (state: HomeState): HomeBackgroundOption[] => {
-  const options: HomeBackgroundOption[] = [];
-  const active = state.cosmetics.homeBackground.activeSelection;
+export const getCosmeticOptions = (state: HomeState, category: CosmeticCategory): CosmeticOption[] => {
+  const options: CosmeticOption[] = [];
+  const categoryState = getCategoryState(state.cosmetics, category);
+  const active = categoryState.activeSelection;
 
   ACHIEVEMENT_KEYS.forEach((key) => {
     const theme = getThemeForAchievement(key);
-    const progress = state.cosmetics.homeBackground.byAchievement[key];
+    if (theme.category !== category) {
+      return;
+    }
+    const progress = getProgressForAchievement(state, key);
     const levelsUnlocked = progress?.levelsUnlocked ?? 0;
-    const nextInfo = getNextHomeBackgroundLevelCost(state, key);
+    const nextInfo = getNextCosmeticLevelInfo(state, key);
     for (let level = 1; level <= theme.levels.length; level += 1) {
       const unlocked = level <= levelsUnlocked;
       const selected = active?.source === key && active.level === level;
@@ -557,6 +633,7 @@ export const getHomeBackgroundOptions = (state: HomeState): HomeBackgroundOption
         nextInfo?.level === level &&
         state.currency >= (nextInfo?.cost ?? Number.MAX_SAFE_INTEGER);
       options.push({
+        category,
         source: key,
         level,
         unlocked,
@@ -571,7 +648,7 @@ export const getHomeBackgroundOptions = (state: HomeState): HomeBackgroundOption
   return options;
 };
 
-export const purchaseHomeBackgroundLevel = (
+export const purchaseCosmeticLevel = (
   key: AchievementKey,
 ): { success: boolean; error?: string; state: HomeState; cost?: number } => {
   let purchaseCost: number | undefined;
@@ -579,18 +656,20 @@ export const purchaseHomeBackgroundLevel = (
     if (!draft.achievements[key]?.unlocked) {
       return { changed: false, error: 'achievement_locked' };
     }
-    const nextInfo = getNextHomeBackgroundLevel(draft, key);
+    const theme = getThemeForAchievement(key);
+    const nextInfo = getNextCosmeticLevelInfo(draft, key);
     if (!nextInfo) {
       return { changed: false, error: 'max_level_reached' };
     }
     if (draft.currency < nextInfo.cost) {
       return { changed: false, error: 'insufficient_currency' };
     }
-    const progress = draft.cosmetics.homeBackground.byAchievement[key]!;
+    const categoryState = getCategoryState(draft.cosmetics, theme.category);
+    const progress = categoryState.byAchievement[key]!;
     draft.currency -= nextInfo.cost;
     progress.levelsUnlocked = nextInfo.level;
     progress.currentLevel = nextInfo.level;
-    draft.cosmetics.homeBackground.activeSelection = { source: key, level: nextInfo.level };
+    categoryState.activeSelection = { source: key, level: nextInfo.level };
     ensureCosmeticsForUnlockedAchievements(draft);
     purchaseCost = nextInfo.cost;
     return { changed: true };
@@ -604,19 +683,25 @@ export const purchaseHomeBackgroundLevel = (
   };
 };
 
-export const setActiveHomeBackground = (
+export const setActiveCosmeticLevel = (
+  category: CosmeticCategory,
   source: AchievementKey,
   level: number,
 ): { success: boolean; error?: string; state: HomeState } => {
   const { state, changed, error } = mutateHomeState((draft) => {
-    const progress = draft.cosmetics.homeBackground.byAchievement[source];
+    const theme = getThemeForAchievement(source);
+    if (!theme || theme.category !== category) {
+      return { changed: false, error: 'invalid_level' };
+    }
+    const categoryState = getCategoryState(draft.cosmetics, category);
+    const progress = categoryState.byAchievement[source];
     if (!progress || level < 1 || level > progress.levelsUnlocked) {
       return { changed: false, error: 'level_locked' };
     }
     if (!getThemeLevelDefinition(source, level)) {
       return { changed: false, error: 'invalid_level' };
     }
-    draft.cosmetics.homeBackground.activeSelection = { source, level };
+    categoryState.activeSelection = { source, level };
     ensureCosmeticsForUnlockedAchievements(draft);
     return { changed: true };
   });
@@ -624,18 +709,32 @@ export const setActiveHomeBackground = (
   return { success: changed, error, state };
 };
 
-export const getNextHomeBackgroundLevelCost = (
+export const getNextCosmeticLevelCost = (
   state: HomeState,
   key: AchievementKey,
 ): { level: number; cost: number } | null => {
-  const info = getNextHomeBackgroundLevel(state, key);
+  const info = getNextCosmeticLevelInfo(state, key);
   if (!info) {
     return null;
   }
   return { level: info.level, cost: info.cost };
 };
 
-export const getHomeBackgroundThemesConfig = () => HOME_BACKGROUND_THEMES;
+export const getCosmeticThemeConfig = () => ACHIEVEMENT_THEME_CONFIG;
+
+export const getHomeBackgroundOptions = (state: HomeState) =>
+  getCosmeticOptions(state, 'backgrounds');
+
+export const getHomeHatOptions = (state: HomeState) => getCosmeticOptions(state, 'hats');
+
+export const purchaseHomeBackgroundLevel = purchaseCosmeticLevel;
+
+export const setActiveHomeBackground = (source: AchievementKey, level: number) =>
+  setActiveCosmeticLevel('backgrounds', source, level);
+
+export const getNextHomeBackgroundLevelCost = getNextCosmeticLevelCost;
+
+export const getHomeBackgroundThemesConfig = () => ACHIEVEMENT_THEME_CONFIG;
 
 
 

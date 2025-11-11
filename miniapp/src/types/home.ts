@@ -3,6 +3,7 @@ export interface DailyGoalState {
   completed: boolean;
   countedInStreak: boolean;
   rewardGranted: boolean;
+  productiveRewardedHours: number;
   setAt: string;
 }
 
@@ -24,11 +25,16 @@ export interface CosmeticThemeProgress {
   currentLevel: number;
 }
 
+export type CosmeticCategory = 'backgrounds' | 'hats';
+
+export interface CosmeticCategoryState {
+  byAchievement: Partial<Record<AchievementKey, CosmeticThemeProgress>>;
+  activeSelection: { source: AchievementKey; level: number } | null;
+}
+
 export interface HomeCosmeticsState {
-  homeBackground: {
-    byAchievement: Partial<Record<AchievementKey, CosmeticThemeProgress>>;
-    activeSelection: { source: AchievementKey; level: number } | null;
-  };
+  backgrounds: CosmeticCategoryState;
+  hats: CosmeticCategoryState;
 }
 
 export interface HomeState {
@@ -51,7 +57,11 @@ export const DEFAULT_HOME_STATE: HomeState = {
     sleepSevenNights: { unlocked: false, unlockedAt: null },
   },
   cosmetics: {
-    homeBackground: {
+    backgrounds: {
+      byAchievement: {},
+      activeSelection: null,
+    },
+    hats: {
       byAchievement: {},
       activeSelection: null,
     },

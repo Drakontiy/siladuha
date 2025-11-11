@@ -60,7 +60,7 @@ const SubjectsPage: React.FC = () => {
       return {
         key,
         title: ACHIEVEMENTS_CONFIG[key].title,
-        description: ACHIEVEMENTS_CONFIG[key].description,
+        description: flag.unlocked ? ACHIEVEMENTS_CONFIG[key].description : '???',
         unlocked: flag.unlocked,
         unlockedAtLabel: formatUnlockedAt(flag.unlockedAt),
       };
@@ -84,9 +84,6 @@ const SubjectsPage: React.FC = () => {
           </span>
           {homeState.currency.toLocaleString('ru-RU')}
         </div>
-        <p className="subjects-card__hint">
-          +100 за каждую выполненную цель.
-        </p>
       </section>
 
       <section className="subjects-card">

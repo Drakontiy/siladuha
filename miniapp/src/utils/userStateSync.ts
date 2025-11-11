@@ -1,5 +1,11 @@
 import { DayActivity } from '../types';
-import { HomeState, DEFAULT_HOME_STATE, CosmeticThemeProgress, AchievementKey } from '../types/home';
+import {
+  HomeState,
+  DEFAULT_HOME_STATE,
+  CosmeticThemeProgress,
+  AchievementKey,
+  CosmeticCategory,
+} from '../types/home';
 import { DEFAULT_SOCIAL_STATE, SocialState } from '../types/social';
 import { DEFAULT_USER_ID, getActiveUser, getUserScopedStorageKey } from './userIdentity';
 
@@ -49,9 +55,11 @@ const cloneCosmeticThemeProgress = (
   };
 };
 
-const cloneCosmetics = (cosmetics: HomeState['cosmetics']): HomeState['cosmetics'] => {
-  const byAchievement: HomeState['cosmetics']['homeBackground']['byAchievement'] = {};
-  const sourceMap = cosmetics.homeBackground.byAchievement ?? {};
+const cloneCosmeticCategoryState = (
+  category: HomeState['cosmetics'][CosmeticCategory],
+): HomeState['cosmetics'][CosmeticCategory] => {
+  const byAchievement: HomeState['cosmetics'][CosmeticCategory]['byAchievement'] = {};
+  const sourceMap = category.byAchievement ?? {};
   (Object.keys(sourceMap) as AchievementKey[]).forEach((key) => {
     const cloned = cloneCosmeticThemeProgress(sourceMap[key]);
     if (cloned) {
@@ -59,19 +67,22 @@ const cloneCosmetics = (cosmetics: HomeState['cosmetics']): HomeState['cosmetics
     }
   });
 
-  const active = cosmetics.homeBackground.activeSelection;
+  const active = category.activeSelection;
   const activeSelection =
     active && typeof active.source === 'string' && typeof active.level === 'number'
       ? { source: active.source, level: active.level }
       : null;
 
   return {
-    homeBackground: {
-      byAchievement,
-      activeSelection,
-    },
+    byAchievement,
+    activeSelection,
   };
 };
+
+const cloneCosmetics = (cosmetics: HomeState['cosmetics']): HomeState['cosmetics'] => ({
+  backgrounds: cloneCosmeticCategoryState(cosmetics.backgrounds),
+  hats: cloneCosmeticCategoryState(cosmetics.hats),
+});
 
 const cloneHomeState = (state: HomeState): HomeState => ({
   currentStreak: state.currentStreak,

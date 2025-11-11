@@ -1,65 +1,94 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import './HomeCustomizationModal.css';
-import { AchievementKey } from '../types/home';
+import { AchievementKey, CosmeticCategory } from '../types/home';
 import {
-  HomeBackgroundStyle,
-  purchaseHomeBackgroundLevel,
-  setActiveHomeBackground,
+  CosmeticStyle,
+  purchaseCosmeticLevel,
+  setActiveCosmeticLevel,
 } from '../utils/homeStorage';
 
 export interface HomeCustomizationItem {
+  category: CosmeticCategory;
   key: AchievementKey;
   title: string;
   description: string;
-  levels: Array<{ level: number; preview: HomeBackgroundStyle; selected: boolean }>;
+  levels: Array<{ level: number; preview: CosmeticStyle; selected: boolean }>;
   nextLevelCost?: number;
   hasMoreLevels: boolean;
 }
 
-const getPreviewStyle = (preview: HomeBackgroundStyle): React.CSSProperties =>
+export interface HomeCustomizationSection {
+  category: CosmeticCategory;
+  title: string;
+  items: HomeCustomizationItem[];
+}
+
+const getPreviewStyle = (preview: CosmeticStyle): React.CSSProperties =>
   preview.kind === 'color'
     ? {
         backgroundColor: preview.color,
       }
     : {
         backgroundImage: `url(${preview.src})`,
-        backgroundSize: 'cover',
+        backgroundSize: 'contain',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',
         backgroundColor: '#0f172a',
       };
 
 interface HomeCustomizationModalProps {
-  items: HomeCustomizationItem[];
+  sections: HomeCustomizationSection[];
   currency: number;
   onClose: () => void;
   onRefresh: () => void;
 }
 
 const HomeCustomizationModal: React.FC<HomeCustomizationModalProps> = ({
-  items,
+  sections,
   currency,
   onClose,
   onRefresh,
 }) => {
   const [error, setError] = useState<string | null>(null);
-  const [activeKey, setActiveKey] = useState<AchievementKey | null>(items[0]?.key ?? null);
+  const flatItems = useMemo(() => {
+    const map = new Map<
+      AchievementKey,
+      { item: HomeCustomizationItem; section: HomeCustomizationSection }
+    >();
+    sections.forEach((section) => {
+      section.items.forEach((item) => {
+        map.set(item.key, { item, section });
+      });
+    });
+    return map;
+  }, [sections]);
+
+  const firstKey = sections[0]?.items[0]?.key ?? null;
+  const [activeKey, setActiveKey] = useState<AchievementKey | null>(firstKey);
 
   useEffect(() => {
-    if (activeKey && !items.some((item) => item.key === activeKey)) {
-      setActiveKey(items[0]?.key ?? null);
+    if (activeKey && !flatItems.has(activeKey)) {
+      setActiveKey(firstKey);
+    } else if (!activeKey && firstKey) {
+      setActiveKey(firstKey);
     }
-  }, [items, activeKey]);
+  }, [flatItems, activeKey, firstKey]);
 
-  const activeItem = useMemo(
-    () => (activeKey ? items.find((item) => item.key === activeKey) ?? null : null),
-    [items, activeKey],
+  const activeEntry = useMemo(
+    () => (activeKey ? flatItems.get(activeKey) ?? null : null),
+    [flatItems, activeKey],
   );
 
+  const activeItem = activeEntry?.item ?? null;
+  const activeCategory = activeEntry?.section.category ?? null;
+
   const handleSelectLevel = (source: AchievementKey, level: number) => {
-    const result = setActiveHomeBackground(source, level);
+    if (!activeCategory) {
+      return;
+    }
+    const result = setActiveCosmeticLevel(activeCategory, source, level);
     if (!result.success) {
-      setError(result.error ?? 'Не удалось применить фон');
+      setError(result.error ?? 'Не удалось применить элемент');
       return;
     }
     setError(null);
@@ -67,16 +96,16 @@ const HomeCustomizationModal: React.FC<HomeCustomizationModalProps> = ({
   };
 
   const handlePurchaseNext = (source: AchievementKey) => {
-    const result = purchaseHomeBackgroundLevel(source);
+    const result = purchaseCosmeticLevel(source);
     if (!result.success) {
       setError(
         result.error === 'insufficient_currency'
           ? 'Недостаточно природного газа'
           : result.error === 'max_level_reached'
-            ? 'Все оттенки уже открыты'
+            ? 'Все уровни уже открыты'
             : result.error === 'achievement_locked'
               ? 'Сначала выполните достижение'
-              : 'Не удалось открыть новый оттенок',
+              : 'Не удалось открыть следующий уровень',
       );
       return;
     }
@@ -89,11 +118,11 @@ const HomeCustomizationModal: React.FC<HomeCustomizationModalProps> = ({
       <div
         className="home-modal"
         role="dialog"
-        aria-label="Настройка фона"
+        aria-label="Настройка внешнего вида"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="home-modal__header">
-          <h3 className="home-modal__title">Фон «Дом»</h3>
+          <h3 className="home-modal__title">Кастомизация «Дом»</h3>
           <button className="home-modal__close" type="button" onClick={onClose}>
             ×
           </button>
@@ -101,10 +130,16 @@ const HomeCustomizationModal: React.FC<HomeCustomizationModalProps> = ({
 
         <div className="home-modal__body">
           <div className="home-modal__achievements">
-            {items.length === 0 ? (
-              <div className="home-modal__empty">Выполните достижения, чтобы получить доступ к кастомизации.</div>
+            {sections.length === 0 ? (
+              <div className="home-modal__empty">
+                Выполните достижения, чтобы получить доступ к кастомизации.
+              </div>
             ) : (
-              items.map((item) => {
+              sections.map((section) => (
+                <div key={section.category} className="home-modal__section">
+                  <h4 className="home-modal__section-title">{section.title}</h4>
+                  <div className="home-modal__achievements-group">
+                    {section.items.map((item) => {
                 const firstPreview = item.levels[0]?.preview;
                 const previewStyle = firstPreview
                   ? getPreviewStyle(firstPreview)
@@ -116,14 +151,17 @@ const HomeCustomizationModal: React.FC<HomeCustomizationModalProps> = ({
                     className={`home-modal__achievement ${activeKey === item.key ? 'home-modal__achievement--active' : ''}`}
                     onClick={() => setActiveKey(item.key)}
                   >
-                    <span
-                      className="home-modal__achievement-preview"
-                      style={previewStyle}
-                    />
-                    <span className="home-modal__achievement-title">{item.title}</span>
-                  </button>
-                );
-              })
+                        <span
+                          className="home-modal__achievement-preview"
+                          style={previewStyle}
+                        />
+                        <span className="home-modal__achievement-title">{item.title}</span>
+                      </button>
+                    );
+                  })}
+                  </div>
+                </div>
+              ))
             )}
           </div>
 
@@ -165,7 +203,7 @@ const HomeCustomizationModal: React.FC<HomeCustomizationModalProps> = ({
                     onClick={() => handlePurchaseNext(activeItem.key)}
                     disabled={currency < activeItem.nextLevelCost}
                   >
-                    Открыть новый оттенок · {activeItem.nextLevelCost.toLocaleString('ru-RU')}
+                    Открыть следующий уровень · {activeItem.nextLevelCost.toLocaleString('ru-RU')}
                   </button>
                 )}
               </div>

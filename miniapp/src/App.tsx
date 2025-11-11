@@ -11,7 +11,7 @@ import SyncStatusBadge from './components/SyncStatusBadge';
 type Page = 'home' | 'stats' | 'time' | 'people' | 'subjects';
 
 const App: React.FC = () => {
-  const [currentPage, setCurrentPage] = useState<Page>('time');
+  const [currentPage, setCurrentPage] = useState<Page>('home');
 
   const renderPage = () => {
     switch (currentPage) {

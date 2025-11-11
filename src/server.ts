@@ -14,10 +14,12 @@ import {
   StoredDailyGoalState,
   StoredAchievementsState,
   StoredAchievementFlag,
+  StoredCosmeticCategoryState,
   StoredCosmeticThemeProgress,
   StoredHomeCosmeticsState,
   StoredHomeState,
   StoredUserState,
+  DEFAULT_HOME_STATE,
 } from './storage/userStateStore';
 import {
   notifyFriendRequestAccepted,
@@ -91,24 +93,44 @@ const cloneStoredCosmeticThemeProgress = (
   currentLevel: progress?.currentLevel ?? 0,
 });
 
-const cloneStoredCosmetics = (cosmetics: StoredHomeCosmeticsState | undefined): StoredHomeCosmeticsState => {
-  const byAchievementSource = cosmetics?.homeBackground?.byAchievement ?? {};
+const cloneStoredCosmeticCategory = (
+  category: StoredCosmeticCategoryState | undefined,
+): StoredCosmeticCategoryState => {
+  const source = category ?? { byAchievement: {}, activeSelection: null };
   const clonedByAchievement: Record<string, StoredCosmeticThemeProgress> = {};
-  for (const [key, value] of Object.entries(byAchievementSource)) {
+  Object.entries(source.byAchievement ?? {}).forEach(([key, value]) => {
     clonedByAchievement[key] = cloneStoredCosmeticThemeProgress(value);
-  }
-
-  const active = cosmetics?.homeBackground?.activeSelection;
+  });
+  const active = source.activeSelection;
   const activeSelection =
     active && typeof active.source === 'string' && typeof active.level === 'number'
       ? { source: active.source, level: active.level }
       : null;
-
   return {
-    homeBackground: {
-      byAchievement: clonedByAchievement,
-      activeSelection,
-    },
+    byAchievement: clonedByAchievement,
+    activeSelection,
+  };
+};
+
+const cloneStoredCosmetics = (cosmetics: StoredHomeCosmeticsState | undefined): StoredHomeCosmeticsState => {
+  const source =
+    cosmetics ??
+    {
+      backgrounds: DEFAULT_HOME_STATE.cosmetics.backgrounds,
+      hats: DEFAULT_HOME_STATE.cosmetics.hats,
+    };
+  const backgroundsSource =
+    (source as { backgrounds?: StoredCosmeticCategoryState; homeBackground?: StoredCosmeticCategoryState })
+      .backgrounds ??
+    (source as { homeBackground?: StoredCosmeticCategoryState }).homeBackground ??
+    DEFAULT_HOME_STATE.cosmetics.backgrounds;
+  const hatsSource =
+    (source as { hats?: StoredCosmeticCategoryState; homeHat?: StoredCosmeticCategoryState }).hats ??
+    (source as { homeHat?: StoredCosmeticCategoryState }).homeHat ??
+    DEFAULT_HOME_STATE.cosmetics.hats;
+  return {
+    backgrounds: cloneStoredCosmeticCategory(backgroundsSource),
+    hats: cloneStoredCosmeticCategory(hatsSource),
   };
 };
 

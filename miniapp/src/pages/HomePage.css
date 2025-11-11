@@ -77,10 +77,28 @@
   width: 100%;
 }
 
+.home-illustration-avatar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: min(220px, 100%);
+}
+
 .home-illustration-image {
   max-width: 220px;
   width: 100%;
   height: auto;
+}
+
+.home-illustration-hat {
+  position: absolute;
+  width: 70%;
+  max-width: 150px;
+  left: 50%;
+  bottom: 60%;
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 
 .home-actions {

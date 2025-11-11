@@ -55,8 +55,27 @@
 
 .home-modal__achievements {
   display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.home-modal__section {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  flex-wrap: wrap;
+}
+
+.home-modal__section-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.home-modal__achievements-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .home-modal__achievement {

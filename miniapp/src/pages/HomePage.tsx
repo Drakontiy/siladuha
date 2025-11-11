@@ -1,18 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import TimePicker from '../components/TimePicker';
-import HomeCustomizationModal, { HomeCustomizationItem } from '../components/HomeCustomizationModal';
+import HomeCustomizationModal, {
+  HomeCustomizationItem,
+  HomeCustomizationSection,
+} from '../components/HomeCustomizationModal';
 import {
-  GOAL_REWARD,
   calculateProductiveMinutes,
   ensureAchievementsUpToDate,
-  getHomeBackgroundOptions,
+  getCosmeticOptions,
+  getCosmeticThemeConfig,
   getHomeBackgroundStyle,
-  getHomeBackgroundThemesConfig,
-  getNextHomeBackgroundLevelCost,
+  getHomeHatStyle,
+  getNextCosmeticLevelCost,
   loadHomeState,
   processPendingDays,
   saveHomeState,
   setDailyGoal,
+  CosmeticOption,
 } from '../utils/homeStorage';
 import { getDateKey, getStartOfDay } from '../utils/dateUtils';
 import { AchievementKey } from '../types/home';
@@ -89,49 +93,6 @@ const HomePage: React.FC = () => {
     }
 
     const productive = calculateProductiveMinutes(today);
-
-    const goalForToday = state.goals[todayDateKey];
-    if (goalForToday) {
-      const goalCompletedToday =
-        goalForToday.targetMinutes > 0 && productive >= goalForToday.targetMinutes;
-
-      if (goalCompletedToday) {
-        const alreadyCompleted = goalForToday.completed;
-        const rewardGranted = goalForToday.rewardGranted;
-        const countedInStreak = goalForToday.countedInStreak;
-
-        if (!alreadyCompleted || !rewardGranted || !countedInStreak) {
-          const updatedGoal = {
-            ...goalForToday,
-            completed: true,
-            countedInStreak: true,
-            rewardGranted: true,
-          };
-
-          let updatedCurrency = state.currency;
-          if (!rewardGranted) {
-            updatedCurrency += GOAL_REWARD;
-          }
-
-          let updatedStreak = state.currentStreak;
-          if (!countedInStreak) {
-            updatedStreak += 1;
-          }
-
-          state = {
-            ...state,
-            currentStreak: updatedStreak,
-            lastProcessedDate: todayDateKey,
-            currency: updatedCurrency,
-            goals: {
-              ...state.goals,
-              [todayDateKey]: updatedGoal,
-            },
-          };
-          mutated = true;
-        }
-      }
-    }
 
     const achievementsResult = ensureAchievementsUpToDate(state, now);
     if (achievementsResult.changed) {
@@ -217,6 +178,7 @@ const HomePage: React.FC = () => {
   const streakImageAlt = homeState.currentStreak > 0 ? 'Отличное настроение' : 'Пора собраться';
 
   const backgroundStyleDef = useMemo(() => getHomeBackgroundStyle(homeState), [homeState]);
+  const hatStyleDef = useMemo(() => getHomeHatStyle(homeState), [homeState]);
   const homePageStyle = useMemo<React.CSSProperties>(() => {
     if (backgroundStyleDef.kind === 'color') {
       return { backgroundColor: backgroundStyleDef.color };
@@ -229,46 +191,82 @@ const HomePage: React.FC = () => {
       backgroundRepeat: 'no-repeat',
     };
   }, [backgroundStyleDef]);
-  const backgroundOptions = useMemo(() => getHomeBackgroundOptions(homeState), [homeState]);
-  const currency = homeState.currency;
-  const themeConfig = useMemo(() => getHomeBackgroundThemesConfig(), []);
-  const unlockedOptions = useMemo(
-    () => backgroundOptions.filter((option) => option.unlocked),
-    [backgroundOptions],
+  const backgroundOptions = useMemo(
+    () => getCosmeticOptions(homeState, 'backgrounds'),
+    [homeState],
   );
-  const customizationItems: HomeCustomizationItem[] = useMemo(() => {
-    const groups = new Map<AchievementKey, HomeCustomizationItem['levels']>();
-    unlockedOptions.forEach((option) => {
-      const key = option.source as AchievementKey;
-      if (!option.style) {
-        return;
-      }
-      if (!groups.has(key)) {
-        groups.set(key, []);
-      }
-      groups.get(key)!.push({
-        level: option.level,
-        preview: option.style,
-        selected: option.selected,
-      });
-    });
+  const hatOptions = useMemo(() => getCosmeticOptions(homeState, 'hats'), [homeState]);
+  const currency = homeState.currency;
+  const themeConfig = useMemo(() => getCosmeticThemeConfig(), []);
 
-    return Array.from(groups.entries())
-      .map(([key, levels]) => {
-        const theme = themeConfig[key];
-        const sortedLevels = levels.sort((a, b) => a.level - b.level);
-        const nextLevelInfo = getNextHomeBackgroundLevelCost(homeState, key);
-        return {
-          key,
-          title: theme.title,
-          description: theme.description,
-          levels: sortedLevels,
-          nextLevelCost: nextLevelInfo?.cost,
-          hasMoreLevels: !!nextLevelInfo,
-        };
-      })
-      .filter((item) => item.levels.length > 0);
-  }, [unlockedOptions, homeState, themeConfig]);
+  const buildCustomizationItems = useCallback(
+    (category: 'backgrounds' | 'hats', options: CosmeticOption[]) => {
+      const groups = new Map<AchievementKey, HomeCustomizationItem['levels']>();
+      options.forEach((option) => {
+        const key = option.source as AchievementKey;
+        if (!option.unlocked || !option.style) {
+          return;
+        }
+        if (!groups.has(key)) {
+          groups.set(key, []);
+        }
+        groups.get(key)!.push({
+          level: option.level,
+          preview: option.style,
+          selected: option.selected,
+        });
+      });
+
+      return Array.from(groups.entries())
+        .map(([key, levels]) => {
+          const theme = themeConfig[key];
+          if (!theme || theme.category !== category) {
+            return null;
+          }
+          const sortedLevels = levels.sort((a, b) => a.level - b.level);
+          const nextLevelInfo = getNextCosmeticLevelCost(homeState, key);
+          return {
+            category,
+            key,
+            title: theme.title,
+            description: theme.description,
+            levels: sortedLevels,
+            nextLevelCost: nextLevelInfo?.cost,
+            hasMoreLevels: !!nextLevelInfo,
+          } as HomeCustomizationItem;
+        })
+        .filter((item): item is HomeCustomizationItem => !!item && item.levels.length > 0);
+    },
+    [homeState, themeConfig],
+  );
+
+  const backgroundItems = useMemo(
+    () => buildCustomizationItems('backgrounds', backgroundOptions),
+    [buildCustomizationItems, backgroundOptions],
+  );
+  const hatItems = useMemo(
+    () => buildCustomizationItems('hats', hatOptions),
+    [buildCustomizationItems, hatOptions],
+  );
+
+  const customizationSections: HomeCustomizationSection[] = useMemo(() => {
+    const sectionsList: HomeCustomizationSection[] = [];
+    if (backgroundItems.length > 0) {
+      sectionsList.push({
+        category: 'backgrounds',
+        title: 'Фоны',
+        items: backgroundItems,
+      });
+    }
+    if (hatItems.length > 0) {
+      sectionsList.push({
+        category: 'hats',
+        title: 'Головные уборы',
+        items: hatItems,
+      });
+    }
+    return sectionsList;
+  }, [backgroundItems, hatItems]);
 
   return (
     <div className="home-page" style={homePageStyle}>
@@ -293,7 +291,12 @@ const HomePage: React.FC = () => {
       </div>
 
       <div className="home-illustration">
-        <img src={streakImage} alt={streakImageAlt} className="home-illustration-image" />
+        <div className="home-illustration-avatar">
+          {hatStyleDef && hatStyleDef.kind === 'image' && (
+            <img src={hatStyleDef.src} alt="" className="home-illustration-hat" />
+          )}
+          <img src={streakImage} alt={streakImageAlt} className="home-illustration-image" />
+        </div>
       </div>
 
       <div className="home-actions">
@@ -320,7 +323,7 @@ const HomePage: React.FC = () => {
 
       {showCustomizationModal && (
         <HomeCustomizationModal
-          items={customizationItems}
+          sections={customizationSections}
           currency={currency}
           onClose={() => setShowCustomizationModal(false)}
           onRefresh={() => {
