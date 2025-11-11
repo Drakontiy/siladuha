@@ -29,19 +29,27 @@ const HOME_BACKGROUND_THEMES: Record<
   {
     colors: string[];
     baseCost: number;
+    title: string;
+    description: string;
   }
 > = {
   firstGoalCompleted: {
     colors: ['#F5F3FF', '#EDE9FE', '#DDD6FE'],
     baseCost: 150,
+    title: 'Первый шаг',
+    description: 'Награда за первую выполненную цель — мягкие сиреневые оттенки.',
   },
   focusEightHours: {
     colors: ['#ECFDF5', '#D1FAE5', '#A7F3D0'],
     baseCost: 220,
+    title: '8 часов фокуса',
+    description: 'Зелёные оттенки фокуса за день продуктивной работы.',
   },
   sleepSevenNights: {
     colors: ['#EEF2FF', '#E0E7FF', '#C7D2FE'],
     baseCost: 200,
+    title: 'Герой сна',
+    description: 'Глубокие вечерние тона за полноценный отдых.',
   },
 };
 

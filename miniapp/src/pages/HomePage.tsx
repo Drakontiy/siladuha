@@ -1,18 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import TimePicker from '../components/TimePicker';
-import HomeCustomizationModal from '../components/HomeCustomizationModal';
+import HomeCustomizationModal, { HomeCustomizationItem } from '../components/HomeCustomizationModal';
 import {
   GOAL_REWARD,
   calculateProductiveMinutes,
   ensureAchievementsUpToDate,
   getHomeBackgroundColor,
   getHomeBackgroundOptions,
+  getHomeBackgroundThemesConfig,
+  getNextHomeBackgroundLevelCost,
   loadHomeState,
   processPendingDays,
   saveHomeState,
   setDailyGoal,
 } from '../utils/homeStorage';
 import { getDateKey, getStartOfDay } from '../utils/dateUtils';
+import { AchievementKey } from '../types/home';
 import './HomePage.css';
 
 const REFRESH_INTERVAL_MS = 30_000;
@@ -65,7 +68,6 @@ const HomePage: React.FC = () => {
 
   const [showGoalPicker, setShowGoalPicker] = useState(false);
   const [showCustomizationModal, setShowCustomizationModal] = useState(false);
-  const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const [recentlyUnlocked, setRecentlyUnlocked] = useState<boolean>(false);
 
   const todayStart = getStartOfDay(new Date());
@@ -217,6 +219,39 @@ const HomePage: React.FC = () => {
   const backgroundColor = useMemo(() => getHomeBackgroundColor(homeState), [homeState]);
   const backgroundOptions = useMemo(() => getHomeBackgroundOptions(homeState), [homeState]);
   const currency = homeState.currency;
+  const themeConfig = useMemo(() => getHomeBackgroundThemesConfig(), []);
+  const unlockedOptions = useMemo(
+    () => backgroundOptions.filter((option) => option.unlocked),
+    [backgroundOptions],
+  );
+  const customizationItems: HomeCustomizationItem[] = useMemo(() => {
+    const groups = new Map<AchievementKey, HomeCustomizationItem['levels']>();
+    unlockedOptions.forEach((option) => {
+      const key = option.source as AchievementKey;
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+      groups.get(key)!.push({
+        level: option.level,
+        color: option.color ?? '#E2E8F0',
+        selected: option.selected,
+      });
+    });
+
+    return Array.from(groups.entries()).map(([key, levels]) => {
+      const theme = themeConfig[key];
+      const sortedLevels = levels.sort((a, b) => a.level - b.level);
+      const nextLevelInfo = getNextHomeBackgroundLevelCost(homeState, key);
+      return {
+        key,
+        title: theme.title,
+        description: theme.description,
+        levels: sortedLevels,
+        nextLevelCost: nextLevelInfo?.cost,
+        hasMoreLevels: !!nextLevelInfo,
+      };
+    });
+  }, [unlockedOptions, homeState, themeConfig]);
 
   return (
     <div className="home-page" style={{ backgroundColor }}>
@@ -250,16 +285,11 @@ const HomePage: React.FC = () => {
           onClick={() => {
             setShowCustomizationModal(true);
             setRecentlyUnlocked(false);
-            setPurchaseError(null);
           }}
         >
           Кастомизация
           {recentlyUnlocked && <span className="home-customize-badge">!</span>}
         </button>
-        <div className="home-currency">
-          <span className="home-currency__label">Природный газ</span>
-          <span className="home-currency__value">{currency.toLocaleString('ru-RU')}</span>
-        </div>
       </div>
 
       {showGoalPicker && (
@@ -273,13 +303,13 @@ const HomePage: React.FC = () => {
 
       {showCustomizationModal && (
         <HomeCustomizationModal
-          options={backgroundOptions}
-          onClose={() => setShowCustomizationModal(false)}
-          onStateChange={() => {
-            setHomeState(loadHomeState());
-            setPurchaseError(null);
-          }}
+          items={customizationItems}
           currency={currency}
+          onClose={() => setShowCustomizationModal(false)}
+          onRefresh={() => {
+            setHomeState(loadHomeState());
+            setRecentlyUnlocked(false);
+          }}
         />
       )}
     </div>
