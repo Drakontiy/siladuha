@@ -300,35 +300,50 @@ const mutateHomeState = (
   options?: { referenceDate?: Date },
 ): { state: HomeState; changed: boolean; error?: string } => {
   const referenceDate = options?.referenceDate ?? new Date();
-  const originalState = loadHomeState();
-  const draft = cloneState(originalState);
+  let baseState = loadHomeState();
+
+  let maintenanceChanged = false;
+  const preProcessed = processPendingDays(baseState, referenceDate);
+  if (preProcessed.changed) {
+    baseState = preProcessed.state;
+    maintenanceChanged = true;
+  }
+  const preEnsured = ensureAchievementsUpToDate(baseState, referenceDate);
+  if (preEnsured.changed) {
+    baseState = preEnsured.state;
+    maintenanceChanged = true;
+  }
+
+  const draft = cloneState(baseState);
   const result = mutator(draft);
 
   if (result.error) {
-    return { state: originalState, changed: false, error: result.error };
+    if (maintenanceChanged) {
+      saveHomeState(baseState);
+    }
+    return { state: baseState, changed: false, error: result.error };
   }
 
-  let finalState = draft;
-  let changed = result.changed;
-
-  const processed = processPendingDays(finalState, referenceDate);
-  finalState = processed.state;
-  if (processed.changed) {
-    changed = true;
-  }
-
-  const ensured = ensureAchievementsUpToDate(finalState, referenceDate);
-  if (ensured.changed) {
-    finalState = ensured.state;
-    changed = true;
-  }
-
-  if (changed) {
+  let finalState = baseState;
+  if (result.changed) {
+    finalState = draft;
+    const postProcessed = processPendingDays(finalState, referenceDate);
+    if (postProcessed.changed) {
+      finalState = postProcessed.state;
+    }
+    const postEnsured = ensureAchievementsUpToDate(finalState, referenceDate);
+    if (postEnsured.changed) {
+      finalState = postEnsured.state;
+    }
     saveHomeState(finalState);
     return { state: finalState, changed: true };
   }
 
-  return { state: originalState, changed: false };
+  if (maintenanceChanged) {
+    saveHomeState(baseState);
+  }
+
+  return { state: baseState, changed: false };
 };
 
 const DEFAULT_STATE: HomeState = cloneState(DEFAULT_HOME_STATE);
