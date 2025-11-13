@@ -116,27 +116,37 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
     event.preventDefault();
     event.stopPropagation();
     
-    // Блокируем скролл контейнера программно
+    // Блокируем скролл контейнера программно - более агрессивно
     if (scrollContainerRef.current) {
       const container = scrollContainerRef.current;
       const scrollLeft = container.scrollLeft;
       const scrollTop = container.scrollTop;
       
+      // Сохраняем позицию скролла перед блокировкой
+      (container as any)._lockedScrollLeft = scrollLeft;
+      (container as any)._lockedScrollTop = scrollTop;
+      
       // Запоминаем текущий скролл и блокируем его
       container.style.overflowX = 'hidden';
       container.style.overflowY = 'hidden';
+      container.style.position = 'relative';
       
-      // Восстанавливаем позицию скролла после небольшой задержки
-      requestAnimationFrame(() => {
-        if (container) {
-          container.scrollLeft = scrollLeft;
-          container.scrollTop = scrollTop;
+      // Принудительно фиксируем позицию скролла
+      const lockScroll = () => {
+        if (container && (container as any)._lockedScrollLeft !== undefined) {
+          container.scrollLeft = (container as any)._lockedScrollLeft;
+          container.scrollTop = (container as any)._lockedScrollTop;
+          requestAnimationFrame(lockScroll);
         }
-      });
+      };
+      
+      // Запускаем блокировку скролла
+      (container as any)._lockScrollAnimation = lockScroll;
+      requestAnimationFrame(lockScroll);
     }
     
     const pointerId = event.pointerId;
-    const startX = event.clientX;
+    const startX = event.clientX || (event as any).touches?.[0]?.clientX || 0;
     const rect = timelineBarRef.current?.getBoundingClientRect();
     
     if (!rect) {
@@ -163,8 +173,15 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
     
     // Продолжаем блокировать скролл
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.style.overflowX = 'hidden';
-      scrollContainerRef.current.style.overflowY = 'hidden';
+      const container = scrollContainerRef.current;
+      container.style.overflowX = 'hidden';
+      container.style.overflowY = 'hidden';
+      
+      // Продолжаем фиксировать позицию скролла
+      if ((container as any)._lockedScrollLeft !== undefined) {
+        container.scrollLeft = (container as any)._lockedScrollLeft;
+        container.scrollTop = (container as any)._lockedScrollTop;
+      }
     }
   };
 
@@ -175,8 +192,18 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
     
     // Восстанавливаем скролл контейнера
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.style.overflowX = 'auto';
-      scrollContainerRef.current.style.overflowY = 'hidden';
+      const container = scrollContainerRef.current;
+      
+      // Останавливаем блокировку скролла
+      if ((container as any)._lockScrollAnimation) {
+        delete (container as any)._lockScrollAnimation;
+        delete (container as any)._lockedScrollLeft;
+        delete (container as any)._lockedScrollTop;
+      }
+      
+      container.style.overflowX = 'auto';
+      container.style.overflowY = 'hidden';
+      container.style.position = '';
     }
 
     const pointerId = event.pointerId;
@@ -194,8 +221,18 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
   const handleTimelinePointerCancel = (event: React.PointerEvent<HTMLDivElement>) => {
     // Восстанавливаем скролл контейнера
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.style.overflowX = 'auto';
-      scrollContainerRef.current.style.overflowY = 'hidden';
+      const container = scrollContainerRef.current;
+      
+      // Останавливаем блокировку скролла
+      if ((container as any)._lockScrollAnimation) {
+        delete (container as any)._lockScrollAnimation;
+        delete (container as any)._lockedScrollLeft;
+        delete (container as any)._lockedScrollTop;
+      }
+      
+      container.style.overflowX = 'auto';
+      container.style.overflowY = 'hidden';
+      container.style.position = '';
     }
     
     const pointerId = event.pointerId;
@@ -364,6 +401,26 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
               onPointerMove={handleTimelinePointerMove}
               onPointerUp={handleTimelinePointerUp}
               onPointerCancel={handleTimelinePointerCancel}
+              onTouchStart={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onTouchMove={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onTouchCancel={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
             >
             {currentMinute !== null && (
               <div
