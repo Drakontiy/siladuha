@@ -209,19 +209,16 @@ bot.on('message_created', async (ctx) => {
 
 // Обработка подтверждения привязки
 bot.on('message_callback', async (ctx) => {
-  // Пробуем разные способы получения callback_data
-  const callbackData = 
-    (ctx.update as { callback_data?: string }).callback_data ||
-    (ctx.message as { callback_data?: string })?.callback_data ||
-    (ctx.update as { message?: { callback_data?: string } })?.message?.callback_data;
+  // Получаем payload из callback
+  const callbackPayload = (ctx.update as { callback?: { payload?: string } })?.callback?.payload;
   
-  if (!callbackData) {
-    console.log('⚠️ No callback_data found in update:', JSON.stringify(ctx.update, null, 2));
+  if (!callbackPayload) {
+    console.log('⚠️ No callback payload found in update:', JSON.stringify(ctx.update, null, 2));
     return;
   }
 
-  const data = callbackData;
-  console.log('📥 Callback data received:', data);
+  const data = callbackPayload;
+  console.log('📥 Callback payload received:', data);
 
   if (data.startsWith('bind_')) {
     const parts = data.split('_');
@@ -234,7 +231,10 @@ bot.on('message_callback', async (ctx) => {
     const code = parts[1];
     const userId = parts[2];
 
-    const user = getUserFromContext(ctx);
+    // Получаем пользователя из callback или из контекста
+    const callbackUser = (ctx.update as { callback?: { user?: { user_id?: number } } })?.callback?.user;
+    const user = callbackUser || getUserFromContext(ctx);
+    
     if (!user?.user_id || String(user.user_id) !== userId) {
       await ctx.answerOnCallback({});
       await ctx.reply('❌ Ошибка: неверный пользователь');
