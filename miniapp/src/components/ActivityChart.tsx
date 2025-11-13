@@ -51,6 +51,10 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
   const timelineBarRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const longPressSuppressedClickRef = useRef(false);
+  const timelineBarPointerStateRef = useRef<Map<number, {
+    startX: number;
+    initialMinutes: number;
+  }>>(new Map());
   const pointerStateRef = useRef<Map<number, { 
     timerId: number; 
     longPress: boolean;
@@ -107,19 +111,59 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
 
   const clampMinute = (minute: number) => Math.max(0, Math.min(DAY_END_MINUTE, minute));
 
-  const handleTimelineClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (longPressSuppressedClickRef.current) {
-      longPressSuppressedClickRef.current = false;
-      return;
-    }
-    const minutes = clampMinute(minutesFromClientX(event.clientX));
-    onLineClick(minutes);
-  };
-
   const handleTimelinePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     // Предотвращаем скролл при касании линии
     event.preventDefault();
     event.stopPropagation();
+    
+    const pointerId = event.pointerId;
+    const startX = event.clientX;
+    const rect = timelineBarRef.current?.getBoundingClientRect();
+    
+    if (!rect) {
+      return;
+    }
+
+    const startMinutes = clampMinute(minutesFromClientX(startX));
+
+    timelineBarPointerStateRef.current.set(pointerId, {
+      startX,
+      initialMinutes: startMinutes,
+    });
+  };
+
+  const handleTimelinePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    // Предотвращаем скролл при движении по линии
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  const handleTimelinePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    // Предотвращаем скролл при отпускании линии
+    event.preventDefault();
+    event.stopPropagation();
+    
+    if (longPressSuppressedClickRef.current) {
+      longPressSuppressedClickRef.current = false;
+      return;
+    }
+
+    const pointerId = event.pointerId;
+    const state = timelineBarPointerStateRef.current.get(pointerId);
+    
+    if (!state) {
+      return;
+    }
+
+    timelineBarPointerStateRef.current.delete(pointerId);
+    
+    // Устанавливаем метку в начальной позиции касания
+    onLineClick(state.initialMinutes);
+  };
+
+  const handleTimelinePointerCancel = (event: React.PointerEvent<HTMLDivElement>) => {
+    const pointerId = event.pointerId;
+    timelineBarPointerStateRef.current.delete(pointerId);
   };
 
   const handleSegmentPointerDown = (
@@ -246,8 +290,10 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
             <div
               className="timeline-bar"
               ref={timelineBarRef}
-              onClick={handleTimelineClick}
               onPointerDown={handleTimelinePointerDown}
+              onPointerMove={handleTimelinePointerMove}
+              onPointerUp={handleTimelinePointerUp}
+              onPointerCancel={handleTimelinePointerCancel}
             >
             {currentMinute !== null && (
               <div
@@ -299,7 +345,17 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
                 key={mark.id}
                 className="time-mark"
                 style={{ left: `${minutesToPercent(mark.timestamp)}%` }}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onPointerUp={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onMarkClick(mark);
+                }}
                 onClick={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
                   onMarkClick(mark);
                 }}
