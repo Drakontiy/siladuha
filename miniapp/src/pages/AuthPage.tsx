@@ -9,7 +9,6 @@ const AuthPage: React.FC<AuthPageProps> = ({ onCodeGenerated }) => {
   const [code, setCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [isAnimating, setIsAnimating] = useState(true);
 
   useEffect(() => {
     const generateCode = async () => {
@@ -27,25 +26,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onCodeGenerated }) => {
         }
 
         const data = await response.json();
-        
-        // Анимация появления символов
-        setIsAnimating(true);
-        const codeArray = data.code.split('');
-        let displayedCode = '';
-        
-        const animateCode = () => {
-          if (displayedCode.length < codeArray.length) {
-            displayedCode += codeArray[displayedCode.length];
-            setCode(displayedCode);
-            setTimeout(animateCode, 50);
-          } else {
-            setIsAnimating(false);
-            setCode(data.code);
-            onCodeGenerated(data.code);
-          }
-        };
-        
-        animateCode();
+        setCode(data.code);
+        onCodeGenerated(data.code);
       } catch (err) {
         setError('Ошибка при генерации кода. Попробуйте обновить страницу.');
         console.error('Failed to generate code:', err);
@@ -63,7 +45,6 @@ const AuthPage: React.FC<AuthPageProps> = ({ onCodeGenerated }) => {
     try {
       await navigator.clipboard.writeText(code);
       setCopied(true);
-      setIsAnimating(false); // Останавливаем анимацию после копирования
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
@@ -92,7 +73,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onCodeGenerated }) => {
 
           {code ? (
             <div className="auth-code-section">
-              <div className={`auth-code-display ${isAnimating ? 'auth-code-animating' : ''}`}>
+              <div className="auth-code-display">
                 {code}
               </div>
               <button 
