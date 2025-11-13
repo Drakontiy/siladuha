@@ -11,7 +11,7 @@
   overflow-y: hidden;
   padding: 12px 0 20px;
   background: transparent;
-  touch-action: pan-x;
+  touch-action: pan-x pinch-zoom;
   overscroll-behavior-x: contain;
 }
 
@@ -48,7 +48,7 @@
   background: linear-gradient(90deg, #E3F2FD 0%, #BBDEFB 50%, #E3F2FD 100%);
   box-shadow: inset 0 0 8px rgba(13, 58, 95, 0.12);
   cursor: pointer;
-  touch-action: pan-x pinch-zoom;
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -81,7 +81,7 @@
   border-radius: 6px;
   cursor: pointer;
   transition: opacity 0.2s;
-  touch-action: pan-x pinch-zoom;
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
