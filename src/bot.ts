@@ -18,6 +18,12 @@ bot.use(async (ctx, next) => {
   if (text) {
     console.log('💬 Message:', text);
   }
+  // Логируем callback события для отладки
+  if (ctx.updateType === 'message_callback') {
+    console.log('🔔 Callback update detected in middleware');
+    console.log('🔔 Callback object:', JSON.stringify(ctx.callback, null, 2));
+    console.log('🔔 Full update:', JSON.stringify(ctx.update, null, 2));
+  }
   return next();
 });
 
@@ -209,15 +215,31 @@ bot.on('message_created', async (ctx) => {
 
 // Обработка подтверждения привязки
 bot.on('message_callback', async (ctx) => {
-  const callbackData = (ctx.update as { callback_data?: string }).callback_data;
+  // Логируем структуру update для отладки
+  console.log('📥 Message callback received');
+  console.log('📋 Update type:', ctx.updateType);
+  console.log('📋 Callback object:', ctx.callback);
+  
+  // Получаем данные callback через ctx.callback.payload
+  const callback = ctx.callback;
+  if (!callback) {
+    console.log('⚠️ No callback object found in context');
+    console.log('📋 Full update:', JSON.stringify(ctx.update, null, 2));
+    return;
+  }
+  
+  // Данные callback находятся в callback.payload
+  const callbackData = callback.payload;
+  
+  console.log('🔍 Extracted callback data (payload):', callbackData);
+  
   if (!callbackData) {
+    console.log('⚠️ No callback payload found. Callback object:', JSON.stringify(callback, null, 2));
+    console.log('📋 Full update:', JSON.stringify(ctx.update, null, 2));
     return;
   }
 
   const data = callbackData;
-  if (!data) {
-    return;
-  }
 
   if (data.startsWith('bind_')) {
     const parts = data.split('_');
