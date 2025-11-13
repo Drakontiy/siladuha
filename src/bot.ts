@@ -209,19 +209,25 @@ bot.on('message_created', async (ctx) => {
 
 // Обработка подтверждения привязки
 bot.on('message_callback', async (ctx) => {
-  const callbackData = (ctx.update as { callback_data?: string }).callback_data;
+  // Пробуем разные способы получения callback_data
+  const callbackData = 
+    (ctx.update as { callback_data?: string }).callback_data ||
+    (ctx.message as { callback_data?: string })?.callback_data ||
+    (ctx.update as { message?: { callback_data?: string } })?.message?.callback_data;
+  
   if (!callbackData) {
+    console.log('⚠️ No callback_data found in update:', JSON.stringify(ctx.update, null, 2));
     return;
   }
 
   const data = callbackData;
-  if (!data) {
-    return;
-  }
+  console.log('📥 Callback data received:', data);
 
   if (data.startsWith('bind_')) {
     const parts = data.split('_');
     if (parts.length !== 3) {
+      await ctx.answerOnCallback({});
+      await ctx.reply('❌ Ошибка: неверный формат данных');
       return;
     }
 
@@ -248,15 +254,24 @@ bot.on('message_callback', async (ctx) => {
       if (!bindResponse.ok) {
         const errorData = await bindResponse.json() as { error?: string };
         await ctx.answerOnCallback({});
-        await ctx.reply(`❌ ${errorData.error || 'Ошибка привязки'}`);
+        await ctx.reply(`❌ Ошибка привязки: ${errorData.error || 'Неизвестная ошибка'}`);
         return;
       }
 
       await ctx.answerOnCallback({});
-      await ctx.editMessage({
-        text: '✅ Аккаунт успешно привязан!\n\n' +
-        'Теперь вы можете использовать мини-приложение.',
-      });
+      
+      // Обновляем сообщение с подтверждением
+      try {
+        await ctx.editMessage({
+          text: '✅ Аккаунт успешно привязан!\n\n' +
+          'Теперь вы можете использовать мини-приложение. Обновите страницу в мини-приложении или откройте его по ссылке ниже.',
+        });
+      } catch (editError) {
+        console.error('Failed to edit message:', editError);
+        // Если не удалось отредактировать, отправляем новое сообщение
+        await ctx.reply('✅ Аккаунт успешно привязан!\n\n' +
+          'Теперь вы можете использовать мини-приложение. Обновите страницу в мини-приложении или откройте его по ссылке ниже.');
+      }
 
       // Отправляем ссылку на мини-приложение с user_id
       const urlWithContext = buildMiniAppUrlForContext(ctx);
@@ -269,11 +284,20 @@ bot.on('message_callback', async (ctx) => {
     } catch (error) {
       console.error('❌ Error binding code:', error);
       await ctx.answerOnCallback({});
-      await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
+      await ctx.reply('❌ Произошла ошибка при привязке аккаунта. Попробуйте позже.');
     }
   } else if (data.startsWith('cancel_bind_')) {
     await ctx.answerOnCallback({});
-    await ctx.editMessage({ text: '❌ Привязка отменена.' });
+    try {
+      await ctx.editMessage({
+        text: '❌ Привязка отменена.\n\n' +
+        'Если вы хотите привязать аккаунт, сгенерируйте новый код в мини-приложении и отправьте его боту.',
+      });
+    } catch (editError) {
+      console.error('Failed to edit message:', editError);
+      await ctx.reply('❌ Привязка отменена.\n\n' +
+        'Если вы хотите привязать аккаунт, сгенерируйте новый код в мини-приложении и отправьте его боту.');
+    }
   }
 });
 

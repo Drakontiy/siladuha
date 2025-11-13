@@ -79,6 +79,23 @@
   color: #0f172a;
   text-align: center;
   word-break: break-all;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-code-display.auth-code-animating {
+  animation: pulse 0.5s ease-in-out;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
 }
 
 .auth-copy-button {

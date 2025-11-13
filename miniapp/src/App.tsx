@@ -18,56 +18,122 @@ const App: React.FC = () => {
   const [authCode, setAuthCode] = useState<string | null>(null);
 
   useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+    let isChecking = false;
+    let shouldStop = false;
+    
     const checkAuth = async () => {
-      const user = getActiveUser();
-      const isAuth = user.userId !== DEFAULT_USER_ID && user.userId !== 'local';
-      
-      if (!isAuth && authCode) {
-        // Проверяем, привязан ли код
-        try {
-          const apiBase = process.env.MINIAPP_API_BASE || window.location.origin;
-          const response = await fetch(`${apiBase}/api/auth/check-code/${authCode}`);
-          
-          if (response.ok) {
-            const data = await response.json() as { bound: boolean; userId: string | null };
-            if (data.bound && data.userId) {
-              // Код привязан, сохраняем user_id в localStorage и обновляем URL
-              try {
-                localStorage.setItem('max_last_user_id', data.userId);
-                
-                // Обновляем URL с user_id
-                const url = new URL(window.location.href);
-                url.searchParams.set('user_id', data.userId);
-                window.history.replaceState({}, '', url.toString());
-                
-                // Обновляем userIdentity
-                const { initializeUserIdentity } = await import('./utils/userIdentity');
-                initializeUserIdentity();
-                
-                // Перезагружаем страницу для применения изменений
-                window.location.reload();
-                return;
-              } catch (err) {
-                console.error('Failed to save user_id:', err);
-              }
-            }
-          }
-        } catch (error) {
-          console.error('Failed to check code:', error);
-        }
+      // Предотвращаем параллельные проверки
+      if (isChecking || shouldStop) {
+        return;
       }
       
-      setIsAuthenticated(isAuth);
+      isChecking = true;
+      
+      try {
+        const user = getActiveUser();
+        const isAuth = user.userId !== DEFAULT_USER_ID && user.userId !== 'local';
+        
+        // Если уже авторизован, останавливаем проверку
+        if (isAuth) {
+          setIsAuthenticated(true);
+          shouldStop = true;
+          if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+          }
+          isChecking = false;
+          return;
+        }
+        
+        // Если есть код, проверяем его статус
+        if (authCode && !shouldStop) {
+          try {
+            const apiBase = process.env.MINIAPP_API_BASE || window.location.origin;
+            const response = await fetch(`${apiBase}/api/auth/check-code/${authCode}`, {
+              cache: 'no-store',
+              headers: {
+                'Cache-Control': 'no-cache',
+              },
+            });
+            
+            if (response.ok) {
+              const data = await response.json() as { bound: boolean; userId: string | null };
+              if (data.bound && data.userId && !shouldStop) {
+                // Код привязан, сохраняем user_id в localStorage и обновляем URL
+                try {
+                  shouldStop = true;
+                  
+                  localStorage.setItem('max_last_user_id', data.userId);
+                  
+                  // Обновляем URL с user_id
+                  const url = new URL(window.location.href);
+                  url.searchParams.set('user_id', data.userId);
+                  window.history.replaceState({}, '', url.toString());
+                  
+                  // Останавливаем интервал перед перезагрузкой
+                  if (intervalId) {
+                    clearInterval(intervalId);
+                    intervalId = null;
+                  }
+                  
+                  // Обновляем userIdentity
+                  const { initializeUserIdentity } = await import('./utils/userIdentity');
+                  initializeUserIdentity();
+                  
+                  // Устанавливаем авторизованный статус перед перезагрузкой
+                  setIsAuthenticated(true);
+                  
+                  // Перезагружаем страницу для применения изменений
+                  setTimeout(() => {
+                    window.location.reload();
+                  }, 100);
+                  isChecking = false;
+                  return;
+                } catch (err) {
+                  console.error('Failed to save user_id:', err);
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Failed to check code:', error);
+          }
+        }
+        
+        // Если не авторизован, устанавливаем статус
+        if (!shouldStop) {
+          setIsAuthenticated(false);
+        }
+      } finally {
+        isChecking = false;
+      }
     };
 
+    // Проверяем сразу
     checkAuth();
     
-    // Проверяем каждые 2 секунды, если не авторизован
-    if (!isAuthenticated) {
-      const interval = setInterval(checkAuth, 2000);
-      return () => clearInterval(interval);
+    // Запускаем интервал только если есть код
+    if (authCode && !shouldStop) {
+      intervalId = setInterval(() => {
+        if (!shouldStop) {
+          checkAuth();
+        } else {
+          if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+          }
+        }
+      }, 2000);
     }
-  }, [authCode, isAuthenticated]);
+    
+    return () => {
+      shouldStop = true;
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+  }, [authCode]);
 
   const handleCodeGenerated = (code: string) => {
     setAuthCode(code);
