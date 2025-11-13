@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import cors from 'cors';
 import express from 'express';
 import path from 'path';
@@ -31,6 +31,25 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const API_BASE_PATH = '/api';
 const USER_ID_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
+
+// Хранилище временных кодов для привязки аккаунтов
+interface AuthCode {
+  code: string;
+  expiresAt: number;
+  userId: string | null;
+}
+
+const authCodes = new Map<string, AuthCode>();
+
+// Очистка истекших кодов каждые 5 минут
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, data] of authCodes.entries()) {
+    if (data.expiresAt < now) {
+      authCodes.delete(code);
+    }
+  }
+}, 5 * 60 * 1000);
 
 void initUserStateStore().catch((error) => {
   console.error('❌ Failed to initialize user state store:', error);
@@ -191,6 +210,111 @@ const removeRequestById = (requests: StoredFriendRequest[], requestId: string): 
 app.get(`${API_BASE_PATH}/health`, (_req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.json({ status: 'ok' });
+});
+
+// Генерация временного кода для привязки аккаунта
+app.post(`${API_BASE_PATH}/auth/generate-code`, (_req, res) => {
+  try {
+    // Генерируем 8-символьный код
+    const code = randomBytes(4).toString('hex').toUpperCase();
+    const expiresAt = Date.now() + 2 * 60 * 1000; // 2 минуты
+
+    authCodes.set(code, {
+      code,
+      expiresAt,
+      userId: null,
+    });
+
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ code, expiresAt });
+  } catch (error) {
+    console.error('❌ Failed to generate auth code:', error);
+    res.status(500).json({ error: 'Failed to generate code' });
+  }
+});
+
+// Привязка кода к user_id
+app.post(`${API_BASE_PATH}/auth/bind-code`, async (req, res) => {
+  try {
+    const { code, userId } = req.body as { code?: string; userId?: string };
+
+    if (!code || typeof code !== 'string') {
+      res.status(400).json({ error: 'Code is required' });
+      return;
+    }
+
+    if (!userId || typeof userId !== 'string') {
+      res.status(400).json({ error: 'User ID is required' });
+      return;
+    }
+
+    const sanitizedUserId = sanitizeUserId(userId);
+    if (!sanitizedUserId) {
+      res.status(400).json({ error: 'Invalid user ID' });
+      return;
+    }
+
+    const authData = authCodes.get(code.toUpperCase());
+    if (!authData) {
+      res.status(404).json({ error: 'Code not found or expired' });
+      return;
+    }
+
+    if (authData.expiresAt < Date.now()) {
+      authCodes.delete(code.toUpperCase());
+      res.status(404).json({ error: 'Code expired' });
+      return;
+    }
+
+    if (authData.userId) {
+      res.status(409).json({ error: 'Code already used' });
+      return;
+    }
+
+    // Привязываем код к user_id
+    authData.userId = sanitizedUserId;
+    authCodes.set(code.toUpperCase(), authData);
+
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ success: true, userId: sanitizedUserId });
+  } catch (error) {
+    console.error('❌ Failed to bind auth code:', error);
+    res.status(500).json({ error: 'Failed to bind code' });
+  }
+});
+
+// Получение user_id по коду (для проверки привязки)
+app.get(`${API_BASE_PATH}/auth/check-code/:code`, (req, res) => {
+  try {
+    const code = req.params.code?.toUpperCase();
+    if (!code) {
+      res.status(400).json({ error: 'Code is required' });
+      return;
+    }
+
+    const authData = authCodes.get(code);
+    if (!authData) {
+      res.status(404).json({ error: 'Code not found' });
+      return;
+    }
+
+    if (authData.expiresAt < Date.now()) {
+      authCodes.delete(code);
+      res.status(404).json({ error: 'Code expired' });
+      return;
+    }
+
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ 
+      code: authData.code,
+      expiresAt: authData.expiresAt,
+      userId: authData.userId,
+      bound: authData.userId !== null,
+    });
+  } catch (error) {
+    console.error('❌ Failed to check auth code:', error);
+    res.status(500).json({ error: 'Failed to check code' });
+  }
 });
 
 app.get(`${API_BASE_PATH}/user/:userId/state`, async (req, res) => {

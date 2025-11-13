@@ -138,6 +138,137 @@ bot.command('help', async (ctx) => {
   await ctx.reply('Используй /start, чтобы получить ссылку на мини-приложение.');
 });
 
+// Обработка кодов привязки аккаунта
+const CODE_REGEX = /^[A-F0-9]{8}$/;
+
+bot.on('message', async (ctx) => {
+  const text = ctx.message?.body?.text?.trim();
+  if (!text) {
+    return;
+  }
+
+  // Проверяем, является ли сообщение кодом
+  if (!CODE_REGEX.test(text)) {
+    return;
+  }
+
+  const user = getUserFromContext(ctx);
+  if (!user?.user_id) {
+    await ctx.reply('❌ Не удалось определить ваш аккаунт. Попробуйте позже.');
+    return;
+  }
+
+  const userId = String(user.user_id);
+  const code = text.toUpperCase();
+
+  try {
+    // Проверяем код через API
+    const apiBase = process.env.MINIAPP_API_BASE || 'http://localhost:3000';
+    const checkResponse = await fetch(`${apiBase}/api/auth/check-code/${code}`);
+    
+    if (!checkResponse.ok) {
+      if (checkResponse.status === 404) {
+        await ctx.reply('❌ Код не найден или истёк. Пожалуйста, сгенерируйте новый код в мини-приложении.');
+      } else {
+        await ctx.reply('❌ Произошла ошибка при проверке кода. Попробуйте позже.');
+      }
+      return;
+    }
+
+    const checkData = await checkResponse.json() as { bound: boolean; userId: string | null };
+    
+    if (checkData.bound) {
+      if (checkData.userId === userId) {
+        await ctx.reply('✅ Этот код уже привязан к вашему аккаунту. Вы можете использовать мини-приложение.');
+      } else {
+        await ctx.reply('❌ Этот код уже привязан к другому аккаунту. Пожалуйста, сгенерируйте новый код.');
+      }
+      return;
+    }
+
+    // Показываем подтверждение
+    const confirmKeyboard = Keyboard.inlineKeyboard([
+      [
+        Keyboard.button.callback('✅ Привязать', `bind_${code}_${userId}`),
+        Keyboard.button.callback('❌ Отмена', `cancel_bind_${code}`),
+      ],
+    ]);
+
+    await ctx.reply(
+      '⚠️ Вы собираетесь привязать свой аккаунт Макс к мини приложению.\n\n' +
+      'Не используйте чужие коды и не передавайте их никому.',
+      {
+        attachments: [confirmKeyboard],
+      },
+    );
+  } catch (error) {
+    console.error('❌ Error processing auth code:', error);
+    await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
+  }
+});
+
+// Обработка подтверждения привязки
+bot.on('callback_query', async (ctx) => {
+  const data = ctx.callbackQuery?.data;
+  if (!data) {
+    return;
+  }
+
+  if (data.startsWith('bind_')) {
+    const parts = data.split('_');
+    if (parts.length !== 3) {
+      return;
+    }
+
+    const code = parts[1];
+    const userId = parts[2];
+
+    const user = getUserFromContext(ctx);
+    if (!user?.user_id || String(user.user_id) !== userId) {
+      await ctx.answerCallbackQuery('❌ Ошибка: неверный пользователь');
+      return;
+    }
+
+    try {
+      const apiBase = process.env.MINIAPP_API_BASE || 'http://localhost:3000';
+      const bindResponse = await fetch(`${apiBase}/api/auth/bind-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code, userId }),
+      });
+
+      if (!bindResponse.ok) {
+        const errorData = await bindResponse.json() as { error?: string };
+        await ctx.answerCallbackQuery(`❌ ${errorData.error || 'Ошибка привязки'}`);
+        return;
+      }
+
+      await ctx.answerCallbackQuery('✅ Аккаунт успешно привязан!');
+      await ctx.editMessageText(
+        '✅ Аккаунт успешно привязан!\n\n' +
+        'Теперь вы можете использовать мини-приложение.',
+      );
+
+      // Отправляем ссылку на мини-приложение с user_id
+      const urlWithContext = buildMiniAppUrlForContext(ctx);
+      await ctx.reply(
+        '🚀 Откройте мини-приложение:',
+        {
+          attachments: [createMiniAppKeyboard(urlWithContext)],
+        },
+      );
+    } catch (error) {
+      console.error('❌ Error binding code:', error);
+      await ctx.answerCallbackQuery('❌ Произошла ошибка. Попробуйте позже.');
+    }
+  } else if (data.startsWith('cancel_bind_')) {
+    await ctx.answerCallbackQuery('Отменено');
+    await ctx.editMessageText('❌ Привязка отменена.');
+  }
+});
+
 bot.catch(async (err, ctx) => {
   console.error('❌ Bot error:', err);
   console.error('Context:', ctx.update);

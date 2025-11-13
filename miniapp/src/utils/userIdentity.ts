@@ -90,11 +90,15 @@ export const initializeUserIdentity = (): MiniAppUser => {
   const fromTelegram = parseUserFromTelegram();
   const lastKnown = loadLastKnownUser();
 
+  // Приоритет: query параметры > Telegram WebApp > сохранённый в localStorage
   activeUser = fromQuery ?? fromTelegram ?? lastKnown ?? { userId: DEFAULT_USER_ID };
 
-  safeLocalStorageSet(LAST_USER_ID_KEY, activeUser.userId);
-  if (activeUser.name) {
-    safeLocalStorageSet(LAST_USER_NAME_KEY, activeUser.name);
+  // Сохраняем только если это не DEFAULT_USER_ID
+  if (activeUser.userId !== DEFAULT_USER_ID && activeUser.userId !== 'local') {
+    safeLocalStorageSet(LAST_USER_ID_KEY, activeUser.userId);
+    if (activeUser.name) {
+      safeLocalStorageSet(LAST_USER_NAME_KEY, activeUser.name);
+    }
   }
 
   return activeUser;
