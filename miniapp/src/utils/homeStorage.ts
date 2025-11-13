@@ -42,7 +42,7 @@ const ACHIEVEMENT_THEME_CONFIG: Record<
   firstGoalCompleted: {
     category: 'hats',
     levels: [
-      { kind: 'image', value: 'images/hat.svg' },
+      { kind: 'image', value: 'media/hat.svg' },
     ],
     baseCost: 150,
     title: 'Первый шаг',

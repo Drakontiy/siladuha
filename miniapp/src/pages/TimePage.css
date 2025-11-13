@@ -71,14 +71,14 @@
   width: 170px;
   height: 170px;
   border-radius: 85px;
-  background: linear-gradient(180deg, #82EF52 0%, #58C82A 100%);
+  background: linear-gradient(180deg, #52D1EF 0%, #189CCC 100%);
   color: #ffffff;
   border: none;
   font-size: 18px;
   font-weight: 600;
   letter-spacing: 0.5px;
   cursor: pointer;
-  box-shadow: 0 18px 36px rgba(88, 200, 42, 0.35);
+  box-shadow: 0 18px 36px rgba(24, 156, 204, 0.35);
   transition: transform 0.2s, box-shadow 0.2s, background 0.3s;
   display: flex;
   flex-direction: column;
@@ -88,16 +88,16 @@
 }
 
 .work-start-button.work-start-button--active {
-  background: linear-gradient(180deg, #EF5252 0%, #D62828 100%);
-  box-shadow: 0 18px 36px rgba(239, 82, 82, 0.35);
+  background: linear-gradient(180deg, #EF7052 0%, #D64A2A 100%);
+  box-shadow: 0 18px 36px rgba(239, 112, 82, 0.35);
 }
 
 .work-start-button:hover {
-  box-shadow: 0 12px 26px rgba(88, 200, 42, 0.45);
+  box-shadow: 0 12px 26px rgba(24, 156, 204, 0.45);
 }
 
 .work-start-button.work-start-button--active:hover {
-  box-shadow: 0 12px 26px rgba(239, 82, 82, 0.45);
+  box-shadow: 0 12px 26px rgba(239, 112, 82, 0.45);
 }
 
 .work-start-button:active {
@@ -148,10 +148,12 @@
 .timer-modal-content {
   background: #ffffff;
   border-radius: 18px;
-  padding: 24px 28px;
+  padding: 24px 20px;
   text-align: center;
-  width: 280px;
+  width: calc(100% - 40px);
+  max-width: 320px;
   box-shadow: 0 18px 38px rgba(13, 58, 95, 0.2);
+  margin: 0 20px;
 }
 
 .timer-modal-content p {
@@ -163,12 +165,13 @@
 
 .timer-modal-actions {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   justify-content: center;
+  flex-wrap: wrap;
 }
 
 .timer-modal-button {
-  padding: 10px 22px;
+  padding: 10px 20px;
   border: none;
   border-radius: 24px;
   font-weight: 600;
@@ -178,6 +181,9 @@
   box-shadow: 0 12px 24px rgba(24, 156, 204, 0.25);
   color: #ffffff;
   background: linear-gradient(180deg, #52D1EF 0%, #189CCC 100%);
+  flex: 1;
+  min-width: 0;
+  max-width: 140px;
 }
 
 .timer-modal-button:hover {
@@ -198,11 +204,11 @@
 }
 
 .timer-modal-button--danger {
-  background: linear-gradient(180deg, #EF5252 0%, #D62828 100%);
-  box-shadow: 0 12px 24px rgba(214, 40, 40, 0.25);
+  background: linear-gradient(180deg, #EF7052 0%, #D64A2A 100%);
+  box-shadow: 0 12px 24px rgba(214, 74, 42, 0.25);
 }
 
 .timer-modal-button--danger:hover {
-  box-shadow: 0 10px 18px rgba(214, 40, 40, 0.35);
+  box-shadow: 0 10px 18px rgba(214, 74, 42, 0.35);
 }
 

@@ -643,7 +643,7 @@ const TimePage: React.FC = () => {
               <>
                 <span>Начать работу</span>
                 <span className="work-start-button__caption">
-                  {timerPrompt?.type === 'resume' ? 'Готовы к новому фокусу?' : '30 минут концентрации'}
+                  {timerPrompt?.type === 'resume' ? 'Готовы к новому фокусу?' : '30 минут'}
                 </span>
               </>
             )}
