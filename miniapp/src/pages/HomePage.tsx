@@ -16,9 +16,10 @@ import {
   processPendingDays,
   saveHomeState,
   setDailyGoal,
+  updateTodayGoal,
   CosmeticOption,
 } from '../utils/homeStorage';
-import { getDateKey, getStartOfDay } from '../utils/dateUtils';
+import { addDays, getDateKey, getStartOfDay } from '../utils/dateUtils';
 import { AchievementKey } from '../types/home';
 import './HomePage.css';
 
@@ -59,11 +60,20 @@ const formatDuration = (totalMinutes: number): string => {
 const HomePage: React.FC = () => {
   const [homeState, setHomeState] = useState(() => {
     const initialState = loadHomeState();
-    const { state: processedState, changed } = processPendingDays(initialState, new Date());
-    if (changed) {
-      saveHomeState(processedState);
+    const { state: processedState, changed: processedChanged } = processPendingDays(initialState, new Date());
+    let state = processedState;
+    let changed = processedChanged;
+    
+    const { state: todayState, changed: todayChanged } = updateTodayGoal(state, new Date());
+    if (todayChanged) {
+      state = todayState;
+      changed = true;
     }
-    return processedState;
+    
+    if (changed) {
+      saveHomeState(state);
+    }
+    return state;
   });
 
   const [productiveMinutes, setProductiveMinutes] = useState(() => {
@@ -71,12 +81,17 @@ const HomePage: React.FC = () => {
   });
 
   const [showGoalPicker, setShowGoalPicker] = useState(false);
+  const [showGoalPickerForTomorrow, setShowGoalPickerForTomorrow] = useState(false);
   const [showCustomizationModal, setShowCustomizationModal] = useState(false);
   const [recentlyUnlocked, setRecentlyUnlocked] = useState<boolean>(false);
 
   const todayStart = getStartOfDay(new Date());
   const todayKey = getDateKey(todayStart);
   const todayGoal = homeState.goals[todayKey];
+
+  const tomorrowStart = getStartOfDay(addDays(new Date(), 1));
+  const tomorrowKey = getDateKey(tomorrowStart);
+  const tomorrowGoal = homeState.goals[tomorrowKey];
 
   const updateHomeData = useCallback(() => {
     const now = new Date();
@@ -89,6 +104,12 @@ const HomePage: React.FC = () => {
     const processed = processPendingDays(state, now);
     if (processed.changed) {
       state = processed.state;
+      mutated = true;
+    }
+
+    const todayResult = updateTodayGoal(state, now);
+    if (todayResult.changed) {
+      state = todayResult.state;
       mutated = true;
     }
 
@@ -146,6 +167,31 @@ const HomePage: React.FC = () => {
     const updatedState = setDailyGoal(todayStart, totalMinutes);
     setHomeState(updatedState);
     updateHomeData();
+  };
+
+  const handleTomorrowGoalButtonClick = () => {
+    if (tomorrowGoal) {
+      return;
+    }
+    setShowGoalPickerForTomorrow(true);
+  };
+
+  const handleTomorrowGoalSelect = (hour: number, minute: number) => {
+    const totalMinutes = hour * 60 + minute;
+    setShowGoalPickerForTomorrow(false);
+
+    if (totalMinutes <= 0) {
+      updateHomeData();
+      return;
+    }
+
+    const updatedState = setDailyGoal(tomorrowStart, totalMinutes);
+    setHomeState(updatedState);
+    updateHomeData();
+  };
+
+  const handleTomorrowGoalPickerCancel = () => {
+    setShowGoalPickerForTomorrow(false);
   };
 
   const handleGoalPickerCancel = () => {
@@ -288,6 +334,11 @@ const HomePage: React.FC = () => {
             <span>{productiveSummary}</span>
           </div>
         )}
+        {goalCompleted && !tomorrowGoal && (
+          <button className="home-goal-button home-goal-button--tomorrow" onClick={handleTomorrowGoalButtonClick}>
+            Установить цель на завтра
+          </button>
+        )}
       </div>
 
       <div className="home-illustration">
@@ -316,6 +367,15 @@ const HomePage: React.FC = () => {
         <TimePicker
           onTimeSelect={handleGoalSelect}
           onCancel={handleGoalPickerCancel}
+          initialHour={todayGoal ? Math.floor(todayGoal.targetMinutes / 60) : undefined}
+          initialMinute={todayGoal ? todayGoal.targetMinutes % 60 : undefined}
+        />
+      )}
+
+      {showGoalPickerForTomorrow && (
+        <TimePicker
+          onTimeSelect={handleTomorrowGoalSelect}
+          onCancel={handleTomorrowGoalPickerCancel}
           initialHour={todayGoal ? Math.floor(todayGoal.targetMinutes / 60) : undefined}
           initialMinute={todayGoal ? todayGoal.targetMinutes % 60 : undefined}
         />

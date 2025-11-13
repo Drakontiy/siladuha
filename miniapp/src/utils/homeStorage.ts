@@ -557,6 +557,93 @@ export const processPendingDays = (
   return { state: nextState, changed: true };
 };
 
+export const updateTodayGoal = (
+  state: HomeState,
+  referenceDate: Date,
+): { state: HomeState; changed: boolean } => {
+  const today = getStartOfDay(referenceDate);
+  const todayKey = getDateKey(today);
+  const existingGoal = state.goals[todayKey];
+
+  if (!existingGoal || existingGoal.targetMinutes === 0) {
+    return { state, changed: false };
+  }
+
+  const productiveMinutes = calculateProductiveMinutes(today);
+  const completed = productiveMinutes >= existingGoal.targetMinutes;
+  const productiveHours = Math.floor(productiveMinutes / 60);
+  const previousRewardedHours = existingGoal.productiveRewardedHours ?? 0;
+  const previousCountedInStreak = existingGoal.countedInStreak ?? false;
+  const previousRewardGranted = existingGoal.rewardGranted ?? false;
+
+  const nextState = cloneState(state);
+  let changed = false;
+  let currencyChanged = false;
+  let currentStreak = nextState.currentStreak;
+
+  // Обновление валюты за продуктивные часы
+  if (productiveHours > previousRewardedHours) {
+    const delta = productiveHours - previousRewardedHours;
+    nextState.currency += delta * 10;
+    currencyChanged = true;
+  } else if (productiveHours < previousRewardedHours) {
+    const delta = previousRewardedHours - productiveHours;
+    const deduction = delta * 10;
+    if (deduction > 0) {
+      const adjustedCurrency = Math.max(0, nextState.currency - deduction);
+      if (adjustedCurrency !== nextState.currency) {
+        nextState.currency = adjustedCurrency;
+        currencyChanged = true;
+      }
+    }
+  }
+
+  // Обновление streak
+  let rewardGranted = previousRewardGranted;
+  let countedInStreak = previousCountedInStreak;
+
+  if (completed) {
+    if (!previousCountedInStreak) {
+      currentStreak += 1;
+      countedInStreak = true;
+      changed = true;
+    }
+    if (!rewardGranted) {
+      const streakReward = Math.min(currentStreak, 7) * GOAL_REWARD;
+      nextState.currency += streakReward;
+      rewardGranted = true;
+      currencyChanged = true;
+      changed = true;
+    }
+  }
+
+  // Обновление цели только если что-то изменилось
+  if (
+    completed !== existingGoal.completed ||
+    countedInStreak !== previousCountedInStreak ||
+    rewardGranted !== previousRewardGranted ||
+    productiveHours !== previousRewardedHours ||
+    currentStreak !== nextState.currentStreak
+  ) {
+    nextState.goals[todayKey] = {
+      targetMinutes: existingGoal.targetMinutes,
+      completed,
+      countedInStreak,
+      rewardGranted,
+      productiveRewardedHours: productiveHours,
+      setAt: existingGoal.setAt,
+    };
+    nextState.currentStreak = currentStreak;
+    changed = true;
+  }
+
+  if (!changed && !currencyChanged) {
+    return { state, changed: false };
+  }
+
+  return { state: nextState, changed: true };
+};
+
 export const ensureAchievementsUpToDate = (
   state: HomeState,
   referenceDate: Date,
