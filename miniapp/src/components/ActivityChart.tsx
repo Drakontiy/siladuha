@@ -21,6 +21,7 @@ const DAY_TOTAL_MINUTES = 24 * 60;
 const DAY_END_MINUTE = DAY_TOTAL_MINUTES - 1;
 const PIXELS_PER_MINUTE = 2;
 const LONG_PRESS_DELAY = 450;
+const MOVE_THRESHOLD = 10; // Пикселей для различения тапа от скролла
 
 const HOUR_TICKS = Array.from({ length: 25 }, (_, index) => index); // 0...24
 
@@ -51,7 +52,14 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
   const timelineBarRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const longPressSuppressedClickRef = useRef(false);
-  const pointerStateRef = useRef<Map<number, { timerId: number; longPress: boolean }>>(new Map());
+  const pointerStateRef = useRef<Map<number, { 
+    timerId: number; 
+    longPress: boolean;
+      startX: number;
+      startY: number;
+      moved: boolean;
+      initialMinutes: number;
+    }>>(new Map());
 
   const timelineWidth = (DAY_TOTAL_MINUTES + 1) * PIXELS_PER_MINUTE;
 
@@ -102,13 +110,159 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
 
   const clampMinute = (minute: number) => Math.max(0, Math.min(DAY_END_MINUTE, minute));
 
+  const timelineBarClickProcessedRef = useRef(false);
+
   const handleTimelineClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    // Предотвращаем двойную обработку клика (если уже обработано через pointer events)
+    if (timelineBarClickProcessedRef.current) {
+      timelineBarClickProcessedRef.current = false;
+      return;
+    }
+    
     if (longPressSuppressedClickRef.current) {
       longPressSuppressedClickRef.current = false;
       return;
     }
     const minutes = clampMinute(minutesFromClientX(event.clientX));
     onLineClick(minutes);
+  };
+
+  const timelineBarPointerStateRef = useRef<{
+    timerId: number | null;
+    startX: number;
+    startY: number;
+    moved: boolean;
+    initialMinutes: number;
+  } | null>(null);
+
+  const handleTimelinePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    // Запрещаем скролл при касании линии
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.style.overflowX = 'hidden';
+    }
+    
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const rect = timelineBarRef.current?.getBoundingClientRect();
+    
+    if (!rect) {
+      return;
+    }
+
+    const startMinutes = clampMinute(minutesFromClientX(startX));
+
+    timelineBarPointerStateRef.current = {
+      timerId: null,
+      startX,
+      startY,
+      moved: false,
+      initialMinutes: startMinutes,
+    };
+
+    // Устанавливаем таймер для обработки клика после проверки на движение
+    const timerId = window.setTimeout(() => {
+      const state = timelineBarPointerStateRef.current;
+      if (!state || state.moved) {
+        return;
+      }
+      
+      // Если не было движения - это тап, устанавливаем метку
+      if (longPressSuppressedClickRef.current) {
+        longPressSuppressedClickRef.current = false;
+        timelineBarPointerStateRef.current = null;
+        return;
+      }
+      
+      // Отмечаем, что клик обработан, чтобы предотвратить двойной вызов через onClick
+      timelineBarClickProcessedRef.current = true;
+      onLineClick(state.initialMinutes);
+      timelineBarPointerStateRef.current = null;
+      
+      // Сбрасываем флаг через небольшую задержку
+      setTimeout(() => {
+        timelineBarClickProcessedRef.current = false;
+      }, 100);
+    }, 100) as unknown as number;
+
+    if (timelineBarPointerStateRef.current) {
+      timelineBarPointerStateRef.current.timerId = timerId;
+    }
+  };
+
+  const handleTimelinePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const state = timelineBarPointerStateRef.current;
+    if (!state) {
+      return;
+    }
+
+    const deltaX = Math.abs(event.clientX - state.startX);
+    const deltaY = Math.abs(event.clientY - state.startY);
+    const totalDelta = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+    // Если движение превышает порог - это скролл, разрешаем скролл
+    if (totalDelta > MOVE_THRESHOLD) {
+      state.moved = true;
+      if (state.timerId !== null) {
+        window.clearTimeout(state.timerId);
+        state.timerId = null;
+      }
+      // Разрешаем скролл
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.style.overflowX = 'auto';
+      }
+    }
+  };
+
+  const handleTimelinePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const state = timelineBarPointerStateRef.current;
+    if (!state) {
+      // Разрешаем скролл на всякий случай
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.style.overflowX = 'auto';
+      }
+      return;
+    }
+
+    // Разрешаем скролл обратно
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.style.overflowX = 'auto';
+    }
+
+    if (state.timerId !== null) {
+      window.clearTimeout(state.timerId);
+    }
+
+    // Если было движение - не обрабатываем как клик
+    if (state.moved) {
+      timelineBarPointerStateRef.current = null;
+      return;
+    }
+
+    // Если не было движения и таймер еще не сработал - обрабатываем клик сразу
+    if (state.timerId !== null) {
+      if (!longPressSuppressedClickRef.current) {
+        timelineBarClickProcessedRef.current = true;
+        onLineClick(state.initialMinutes);
+        setTimeout(() => {
+          timelineBarClickProcessedRef.current = false;
+        }, 100);
+      }
+    }
+
+    timelineBarPointerStateRef.current = null;
+  };
+
+  const handleTimelinePointerCancel = () => {
+    const state = timelineBarPointerStateRef.current;
+    if (state && state.timerId !== null) {
+      window.clearTimeout(state.timerId);
+    }
+    timelineBarPointerStateRef.current = null;
+    
+    // Разрешаем скролл обратно
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.style.overflowX = 'auto';
+    }
   };
 
   const handleSegmentPointerDown = (
@@ -118,6 +272,21 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
   ) => {
     event.stopPropagation();
     const pointerId = event.pointerId;
+
+    // Запрещаем скролл при касании сегмента
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.style.overflowX = 'hidden';
+    }
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const rect = timelineBarRef.current?.getBoundingClientRect();
+    
+    if (!rect) {
+      return;
+    }
+
+    const startMinutes = clampMinute(minutesFromClientX(startX));
 
     const newState = {
       timerId: window.setTimeout(() => {
@@ -130,9 +299,34 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
         onIntervalLongPress(startMarkId, endMarkId);
       }, LONG_PRESS_DELAY),
       longPress: false,
+      startX,
+      startY,
+      moved: false,
+      initialMinutes: startMinutes,
     };
 
     pointerStateRef.current.set(pointerId, newState);
+  };
+
+  const handleSegmentPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const pointerId = event.pointerId;
+    const state = pointerStateRef.current.get(pointerId);
+    if (!state) {
+      return;
+    }
+
+    const deltaX = Math.abs(event.clientX - state.startX);
+    const deltaY = Math.abs(event.clientY - state.startY);
+    const totalDelta = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+    // Если движение превышает порог - это скролл
+    if (totalDelta > MOVE_THRESHOLD) {
+      state.moved = true;
+      // Разрешаем скролл
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.style.overflowX = 'auto';
+      }
+    }
   };
 
   const handleSegmentPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -140,7 +334,16 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
     const pointerId = event.pointerId;
     const state = pointerStateRef.current.get(pointerId);
     if (!state) {
+      // Разрешаем скролл на всякий случай
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.style.overflowX = 'auto';
+      }
       return;
+    }
+
+    // Разрешаем скролл обратно
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.style.overflowX = 'auto';
     }
 
     window.clearTimeout(state.timerId);
@@ -148,22 +351,32 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
 
     if (state.longPress) {
       longPressSuppressedClickRef.current = true;
-    } else {
+    } else if (!state.moved) {
+      // Если не было движения - используем начальную позицию для установки метки
       longPressSuppressedClickRef.current = false;
-      const minutes = clampMinute(minutesFromClientX(event.clientX));
-      onLineClick(minutes);
+      onLineClick(state.initialMinutes);
     }
+    // Если было движение (state.moved === true) - не обрабатываем как клик
   };
 
   const handleSegmentPointerCancel = (event: React.PointerEvent<HTMLDivElement>) => {
     const pointerId = event.pointerId;
     const state = pointerStateRef.current.get(pointerId);
     if (!state) {
+      // Разрешаем скролл на всякий случай
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.style.overflowX = 'auto';
+      }
       return;
     }
     window.clearTimeout(state.timerId);
     pointerStateRef.current.delete(pointerId);
     longPressSuppressedClickRef.current = false;
+    
+    // Разрешаем скролл обратно
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.style.overflowX = 'auto';
+    }
   };
 
   const renderIntervalSegment = (startMark: TimeMark, endMark: TimeMark) => {
@@ -187,6 +400,7 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
           ...(intervalColor !== 'transparent' ? { backgroundColor: intervalColor } : {}),
         }}
         onPointerDown={(pointerEvent) => handleSegmentPointerDown(pointerEvent, startMark.id, endMark.id)}
+        onPointerMove={handleSegmentPointerMove}
         onPointerUp={handleSegmentPointerUp}
         onPointerLeave={handleSegmentPointerCancel}
         onPointerCancel={handleSegmentPointerCancel}
@@ -222,6 +436,10 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
               className="timeline-bar"
               ref={timelineBarRef}
               onClick={handleTimelineClick}
+              onPointerDown={handleTimelinePointerDown}
+              onPointerMove={handleTimelinePointerMove}
+              onPointerUp={handleTimelinePointerUp}
+              onPointerCancel={handleTimelinePointerCancel}
             >
             {currentMinute !== null && (
               <div
