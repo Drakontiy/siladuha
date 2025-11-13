@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import './PeoplePage.css';
 import { Friend, FriendRequest, SocialNotification, SocialState } from '../types/social';
-import { getActiveUser } from '../utils/userIdentity';
+import { getActiveUser, unbindAccount } from '../utils/userIdentity';
 import {
   getSocialState,
   setSocialState,
@@ -47,6 +47,7 @@ const PeoplePage: React.FC = () => {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [friendHomeStateCache, setFriendHomeStateCache] = useState<Record<string, SharedUserHomeState | null>>({});
+  const [isUnbinding, setIsUnbinding] = useState(false);
 
   const incomingRequests = useMemo(
     () =>
@@ -184,6 +185,35 @@ const PeoplePage: React.FC = () => {
       console.error('Failed to copy user id:', clipboardError);
       setError('Не удалось скопировать ID');
       setMessage(null);
+    }
+  };
+
+  const handleUnbindAccount = async () => {
+    if (isUnbinding) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Вы уверены, что хотите отвязать аккаунт?\n\n' +
+      'После отвязки вам потребуется снова привязать аккаунт для использования мини-приложения.'
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsUnbinding(true);
+    setError(null);
+
+    try {
+      await unbindAccount();
+      // Перезагружаем страницу, чтобы вернуться на страницу авторизации
+      window.location.reload();
+    } catch (unbindError) {
+      console.error('Failed to unbind account:', unbindError);
+      setError(unbindError instanceof Error ? unbindError.message : 'Не удалось отвязать аккаунт');
+      setMessage(null);
+      setIsUnbinding(false);
     }
   };
 
@@ -469,6 +499,14 @@ const PeoplePage: React.FC = () => {
             disabled={isAddFriendBusy}
           >
             Добавить друга
+          </button>
+          <button
+            className="people-button people-button--danger"
+            onClick={handleUnbindAccount}
+            disabled={isUnbinding}
+            style={{ marginLeft: '8px' }}
+          >
+            {isUnbinding ? 'Отвязываем...' : 'Отвязать аккаунт'}
           </button>
         </div>
       </header>

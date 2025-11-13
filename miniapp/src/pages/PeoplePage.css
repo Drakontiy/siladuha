@@ -76,6 +76,15 @@
   color: #b91c1c;
 }
 
+.people-button--danger {
+  background-color: #dc2626;
+  color: #ffffff;
+}
+
+.people-button--danger:hover:not(:disabled) {
+  background-color: #b91c1c;
+}
+
 .people-section {
   display: flex;
   flex-direction: column;

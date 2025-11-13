@@ -252,11 +252,20 @@ bot.on('message_callback', async (ctx) => {
 
     const user = getUserFromContext(ctx);
     if (!user?.user_id || String(user.user_id) !== userId) {
-      await ctx.answerOnCallback({});
+      try {
+        // Отвечаем на callback с уведомлением об ошибке
+        await ctx.answerOnCallback({ notification: '❌ Ошибка: неверный пользователь' });
+      } catch (answerError) {
+        console.error('Failed to answer callback:', answerError);
+      }
       await ctx.reply('❌ Ошибка: неверный пользователь');
       return;
     }
 
+    // Сначала выполняем привязку кода
+    let bindSuccessful = false;
+    let bindError: string | null = null;
+    
     try {
       const apiBase = process.env.MINIAPP_API_BASE || 'http://localhost:3000';
       const bindResponse = await fetch(`${apiBase}/api/auth/bind-code`, {
@@ -269,12 +278,49 @@ bot.on('message_callback', async (ctx) => {
 
       if (!bindResponse.ok) {
         const errorData = await bindResponse.json() as { error?: string };
-        await ctx.answerOnCallback({});
-        await ctx.reply(`❌ ${errorData.error || 'Ошибка привязки'}`);
-        return;
+        bindError = errorData.error || 'Ошибка привязки';
+        bindSuccessful = false;
+      } else {
+        // Проверяем, что привязка действительно прошла успешно
+        const bindData = await bindResponse.json() as { success?: boolean; userId?: string };
+        if (bindData.success && bindData.userId === userId) {
+          bindSuccessful = true;
+        } else {
+          bindError = 'Ошибка при привязке аккаунта';
+          bindSuccessful = false;
+        }
       }
+    } catch (bindRequestError) {
+      console.error('❌ Error during bind request:', bindRequestError);
+      // Проверяем, возможно привязка всё же прошла успешно
+      try {
+        const apiBase = process.env.MINIAPP_API_BASE || 'http://localhost:3000';
+        const checkResponse = await fetch(`${apiBase}/api/auth/check-code/${code}`);
+        if (checkResponse.ok) {
+          const checkData = await checkResponse.json() as { bound: boolean; userId: string | null };
+          if (checkData.bound && checkData.userId === userId) {
+            bindSuccessful = true;
+            console.log('✅ Code was bound successfully (verified after error)');
+          }
+        }
+      } catch (checkError) {
+        console.error('Failed to verify bind status:', checkError);
+      }
+      
+      if (!bindSuccessful) {
+        bindError = 'Произошла ошибка при привязке аккаунта';
+      }
+    }
 
-      await ctx.answerOnCallback({});
+    // Теперь отправляем ответы пользователю только если уверены в результате
+    if (bindSuccessful) {
+      // Привязка успешна - отвечаем на callback с уведомлением
+      try {
+        await ctx.answerOnCallback({ notification: '✅ Аккаунт успешно привязан!' });
+      } catch (answerError) {
+        console.error('Failed to answer callback (but bind was successful):', answerError);
+        // Не критично, продолжаем - привязка прошла успешно
+      }
       
       // Пытаемся отредактировать сообщение с подтверждением
       try {
@@ -285,25 +331,50 @@ bot.on('message_callback', async (ctx) => {
       } catch (editError) {
         console.log('Could not edit message, sending new message instead');
         // Если не удалось отредактировать, отправляем новое сообщение
-        await ctx.reply('✅ Аккаунт успешно привязан!\n\n' +
-          'Теперь вы можете использовать мини-приложение.');
+        try {
+          await ctx.reply('✅ Аккаунт успешно привязан!\n\n' +
+            'Теперь вы можете использовать мини-приложение.');
+        } catch (replyError) {
+          console.error('Failed to send success message:', replyError);
+          // Не критично, привязка прошла успешно
+        }
       }
 
       // Отправляем ссылку на мини-приложение с user_id
-      const urlWithContext = buildMiniAppUrlForContext(ctx);
-      await ctx.reply(
-        '🚀 Откройте мини-приложение:',
-        {
-          attachments: [createMiniAppKeyboard(urlWithContext)],
-        },
-      );
-    } catch (error) {
-      console.error('❌ Error binding code:', error);
-      await ctx.answerOnCallback({});
-      await ctx.reply('❌ Произошла ошибка при привязке аккаунта. Попробуйте позже.');
+      try {
+        const urlWithContext = buildMiniAppUrlForContext(ctx);
+        await ctx.reply(
+          '🚀 Откройте мини-приложение:',
+          {
+            attachments: [createMiniAppKeyboard(urlWithContext)],
+          },
+        );
+      } catch (linkError) {
+        console.error('Failed to send mini app link:', linkError);
+        // Не критично, привязка прошла успешно
+      }
+    } else {
+      // Привязка не прошла - отправляем ошибку только если уверены
+      const errorMessage = bindError || 'Произошла ошибка при привязке аккаунта';
+      try {
+        // Отвечаем на callback с уведомлением об ошибке
+        await ctx.answerOnCallback({ notification: `❌ ${errorMessage}` });
+      } catch (answerError) {
+        console.error('Failed to answer callback with error:', answerError);
+      }
+      try {
+        await ctx.reply(`❌ ${errorMessage}. Попробуйте позже.`);
+      } catch (replyError) {
+        console.error('Failed to send error message:', replyError);
+      }
     }
   } else if (data.startsWith('cancel_bind_')) {
-    await ctx.answerOnCallback({});
+    try {
+      // Отвечаем на callback с уведомлением
+      await ctx.answerOnCallback({ notification: 'Отменено' });
+    } catch (answerError) {
+      console.error('Failed to answer callback:', answerError);
+    }
     
     // Пытаемся отредактировать сообщение
     try {

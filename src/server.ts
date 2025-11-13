@@ -317,6 +317,38 @@ app.get(`${API_BASE_PATH}/auth/check-code/:code`, (req, res) => {
   }
 });
 
+// Отвязка аккаунта (удаление user_id из localStorage на клиенте)
+// Это просто подтверждающий endpoint, реальная очистка происходит на клиенте
+app.post(`${API_BASE_PATH}/auth/unbind-account`, async (req, res) => {
+  try {
+    const { userId } = req.body as { userId?: string };
+
+    if (!userId || typeof userId !== 'string') {
+      res.status(400).json({ error: 'User ID is required' });
+      return;
+    }
+
+    const sanitizedUserId = sanitizeUserId(userId);
+    if (!sanitizedUserId) {
+      res.status(400).json({ error: 'Invalid user ID' });
+      return;
+    }
+
+    // Удаляем все коды, связанные с этим user_id
+    for (const [code, authData] of authCodes.entries()) {
+      if (authData.userId === sanitizedUserId) {
+        authCodes.delete(code);
+      }
+    }
+
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ success: true, message: 'Account unbound' });
+  } catch (error) {
+    console.error('❌ Failed to unbind account:', error);
+    res.status(500).json({ error: 'Failed to unbind account' });
+  }
+});
+
 app.get(`${API_BASE_PATH}/user/:userId/state`, async (req, res) => {
   const userId = sanitizeUserId(req.params.userId);
   if (!userId) {

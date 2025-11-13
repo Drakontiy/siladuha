@@ -111,3 +111,50 @@ export const getUserScopedStorageKey = (baseKey: string): string => {
   return `${STORAGE_PREFIX}:${userId}:${baseKey}`;
 };
 
+// Отвязка аккаунта - очистка user_id из localStorage
+export const unbindAccount = async (): Promise<void> => {
+  try {
+    const userId = activeUser.userId;
+    
+    // Удаляем user_id из localStorage
+    try {
+      localStorage.removeItem(LAST_USER_ID_KEY);
+      localStorage.removeItem(LAST_USER_NAME_KEY);
+      // Удаляем все сохраненные коды
+      localStorage.removeItem('max_auth_codes');
+    } catch (storageError) {
+      console.error('Failed to clear localStorage:', storageError);
+    }
+    
+    // Уведомляем сервер об отвязке (опционально)
+    if (userId && userId !== DEFAULT_USER_ID && userId !== 'local') {
+      try {
+        const apiBase = process.env.MINIAPP_API_BASE || window.location.origin;
+        await fetch(`${apiBase}/api/auth/unbind-account`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId }),
+        });
+      } catch (apiError) {
+        console.error('Failed to notify server about unbinding:', apiError);
+        // Не критично, продолжаем отвязку
+      }
+    }
+    
+    // Удаляем user_id из URL перед сбросом activeUser
+    const url = new URL(window.location.href);
+    url.searchParams.delete('user_id');
+    url.searchParams.delete('user_name');
+    url.searchParams.delete('username');
+    window.history.replaceState({}, '', url.toString());
+    
+    // Сбрасываем activeUser в последнюю очередь
+    activeUser = { userId: DEFAULT_USER_ID };
+  } catch (error) {
+    console.error('Failed to unbind account:', error);
+    throw error;
+  }
+};
+
