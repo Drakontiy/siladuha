@@ -141,7 +141,7 @@ bot.command('help', async (ctx) => {
 // Обработка кодов привязки аккаунта
 const CODE_REGEX = /^[A-F0-9]{8}$/;
 
-bot.on('message', async (ctx) => {
+bot.on('message_created', async (ctx) => {
   const text = ctx.message?.body?.text?.trim();
   if (!text) {
     return;
@@ -208,8 +208,13 @@ bot.on('message', async (ctx) => {
 });
 
 // Обработка подтверждения привязки
-bot.on('callback_query', async (ctx) => {
-  const data = ctx.callbackQuery?.data;
+bot.on('message_callback', async (ctx) => {
+  const callbackData = (ctx.update as { callback_data?: string }).callback_data;
+  if (!callbackData) {
+    return;
+  }
+
+  const data = callbackData;
   if (!data) {
     return;
   }
@@ -225,7 +230,8 @@ bot.on('callback_query', async (ctx) => {
 
     const user = getUserFromContext(ctx);
     if (!user?.user_id || String(user.user_id) !== userId) {
-      await ctx.answerCallbackQuery('❌ Ошибка: неверный пользователь');
+      await ctx.answerOnCallback({});
+      await ctx.reply('❌ Ошибка: неверный пользователь');
       return;
     }
 
@@ -241,15 +247,16 @@ bot.on('callback_query', async (ctx) => {
 
       if (!bindResponse.ok) {
         const errorData = await bindResponse.json() as { error?: string };
-        await ctx.answerCallbackQuery(`❌ ${errorData.error || 'Ошибка привязки'}`);
+        await ctx.answerOnCallback({});
+        await ctx.reply(`❌ ${errorData.error || 'Ошибка привязки'}`);
         return;
       }
 
-      await ctx.answerCallbackQuery('✅ Аккаунт успешно привязан!');
-      await ctx.editMessageText(
-        '✅ Аккаунт успешно привязан!\n\n' +
+      await ctx.answerOnCallback({});
+      await ctx.editMessage({
+        text: '✅ Аккаунт успешно привязан!\n\n' +
         'Теперь вы можете использовать мини-приложение.',
-      );
+      });
 
       // Отправляем ссылку на мини-приложение с user_id
       const urlWithContext = buildMiniAppUrlForContext(ctx);
@@ -261,11 +268,12 @@ bot.on('callback_query', async (ctx) => {
       );
     } catch (error) {
       console.error('❌ Error binding code:', error);
-      await ctx.answerCallbackQuery('❌ Произошла ошибка. Попробуйте позже.');
+      await ctx.answerOnCallback({});
+      await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
     }
   } else if (data.startsWith('cancel_bind_')) {
-    await ctx.answerCallbackQuery('Отменено');
-    await ctx.editMessageText('❌ Привязка отменена.');
+    await ctx.answerOnCallback({});
+    await ctx.editMessage({ text: '❌ Привязка отменена.' });
   }
 });
 
