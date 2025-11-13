@@ -238,42 +238,73 @@ app.post(`${API_BASE_PATH}/auth/bind-code`, async (req, res) => {
   try {
     const { code, userId } = req.body as { code?: string; userId?: string };
 
+    console.log(`🔗 Bind request: code=${code}, userId=${userId}`);
+
     if (!code || typeof code !== 'string') {
+      console.log(`❌ Bind failed: Code is required`);
       res.status(400).json({ error: 'Code is required' });
       return;
     }
 
     if (!userId || typeof userId !== 'string') {
+      console.log(`❌ Bind failed: User ID is required`);
       res.status(400).json({ error: 'User ID is required' });
       return;
     }
 
     const sanitizedUserId = sanitizeUserId(userId);
     if (!sanitizedUserId) {
+      console.log(`❌ Bind failed: Invalid user ID: ${userId}`);
       res.status(400).json({ error: 'Invalid user ID' });
       return;
     }
 
-    const authData = authCodes.get(code.toUpperCase());
+    const codeUpper = code.toUpperCase();
+    const authData = authCodes.get(codeUpper);
     if (!authData) {
+      console.log(`❌ Bind failed: Code not found: ${codeUpper}`);
       res.status(404).json({ error: 'Code not found or expired' });
       return;
     }
 
+    console.log(`📋 Code data before bind:`, {
+      code: authData.code,
+      expiresAt: authData.expiresAt,
+      expiresIn: authData.expiresAt - Date.now(),
+      userId: authData.userId,
+    });
+
     if (authData.expiresAt < Date.now()) {
-      authCodes.delete(code.toUpperCase());
+      console.log(`❌ Bind failed: Code expired: ${codeUpper}`);
+      authCodes.delete(codeUpper);
       res.status(404).json({ error: 'Code expired' });
       return;
     }
 
     if (authData.userId) {
+      console.log(`❌ Bind failed: Code already used: ${codeUpper}, current userId: ${authData.userId}, requested userId: ${sanitizedUserId}`);
+      // Если код уже привязан к тому же пользователю, возвращаем успех
+      if (authData.userId === sanitizedUserId) {
+        console.log(`✅ Code already bound to same user, returning success`);
+        res.setHeader('Cache-Control', 'no-store');
+        res.json({ success: true, userId: sanitizedUserId });
+        return;
+      }
       res.status(409).json({ error: 'Code already used' });
       return;
     }
 
     // Привязываем код к user_id
     authData.userId = sanitizedUserId;
-    authCodes.set(code.toUpperCase(), authData);
+    authCodes.set(codeUpper, authData);
+
+    console.log(`✅ Code bound successfully: ${codeUpper} -> ${sanitizedUserId}`);
+    console.log(`📋 Code data after bind:`, {
+      code: authData.code,
+      expiresAt: authData.expiresAt,
+      userId: authData.userId,
+      bound: authData.userId !== null,
+    });
 
     res.setHeader('Cache-Control', 'no-store');
     res.json({ success: true, userId: sanitizedUserId });
@@ -294,23 +325,29 @@ app.get(`${API_BASE_PATH}/auth/check-code/:code`, (req, res) => {
 
     const authData = authCodes.get(code);
     if (!authData) {
+      console.log(`🔍 Check code: ${code} - not found`);
       res.status(404).json({ error: 'Code not found' });
       return;
     }
 
     if (authData.expiresAt < Date.now()) {
+      console.log(`🔍 Check code: ${code} - expired`);
       authCodes.delete(code);
       res.status(404).json({ error: 'Code expired' });
       return;
     }
 
-    res.setHeader('Cache-Control', 'no-store');
-    res.json({ 
+    const result = {
       code: authData.code,
       expiresAt: authData.expiresAt,
       userId: authData.userId,
       bound: authData.userId !== null,
-    });
+    };
+
+    console.log(`🔍 Check code: ${code} -`, result);
+
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(result);
   } catch (error) {
     console.error('❌ Failed to check auth code:', error);
     res.status(500).json({ error: 'Failed to check code' });

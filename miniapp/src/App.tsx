@@ -137,12 +137,14 @@ const App: React.FC = () => {
 
     checkAuth();
     
-    // Проверяем каждые 2 секунды, если не авторизован и есть коды для проверки
-    if (isAuthenticated === null || isAuthenticated === false) {
-      const interval = setInterval(checkAuth, 2000);
-      return () => clearInterval(interval);
-    }
-  }, [authCode, isAuthenticated]);
+    // Проверяем каждые 1 секунду, если не авторизован
+    // Увеличиваем частоту проверки для более быстрого обнаружения привязки
+    const intervalId = setInterval(() => {
+      checkAuth();
+    }, 1000);
+    
+    return () => clearInterval(intervalId);
+  }, [authCode]);
 
   const handleCodeGenerated = (code: string) => {
     setAuthCode(code);
