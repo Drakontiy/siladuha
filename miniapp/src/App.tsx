@@ -50,63 +50,82 @@ const App: React.FC = () => {
       const validCodes: string[] = [];
       let boundUserId: string | null = null;
       
+      console.log(`🔍 Checking ${codes.length} auth codes for binding...`);
+      
       for (const code of codes) {
         try {
           const apiBase = process.env.MINIAPP_API_BASE || window.location.origin;
+          console.log(`🔍 Checking code: ${code}`);
           const response = await fetch(`${apiBase}/api/auth/check-code/${code}`);
           
           if (response.ok) {
             const data = await response.json() as { bound: boolean; userId: string | null; expiresAt?: number };
+            console.log(`📋 Code ${code} status:`, data);
             
             // Если код истек, пропускаем его
             if (data.expiresAt && data.expiresAt < Date.now()) {
+              console.log(`⏰ Code ${code} expired`);
               continue;
             }
             
             // Если код привязан, сохраняем user_id
             if (data.bound && data.userId) {
+              console.log(`✅ Code ${code} is bound to userId: ${data.userId}`);
               boundUserId = data.userId;
               // Не добавляем привязанный код в список валидных кодов
               continue;
             }
             
             // Если код не привязан и не истек, добавляем его в список валидных
+            console.log(`⏳ Code ${code} is not bound yet, keeping for next check`);
             validCodes.push(code);
           } else if (response.status === 404) {
             // Код не найден или истек, пропускаем его
+            console.log(`❌ Code ${code} not found (404)`);
             continue;
+          } else {
+            console.log(`❌ Code ${code} check failed with status: ${response.status}`);
+            // Если ошибка при проверке, оставляем код в списке для следующей проверки
+            validCodes.push(code);
           }
         } catch (error) {
-          console.error(`Failed to check code ${code}:`, error);
+          console.error(`❌ Failed to check code ${code}:`, error);
           // Если ошибка при проверке, оставляем код в списке для следующей проверки
           validCodes.push(code);
         }
       }
+      
+      console.log(`📊 Check result: boundUserId=${boundUserId}, validCodes=${validCodes.length}`);
       
       // Обновляем список кодов в localStorage
       localStorage.setItem('max_auth_codes', JSON.stringify(validCodes));
       
       // Если нашли привязанный код, используем user_id
       if (boundUserId) {
+        console.log(`🎉 Found bound userId: ${boundUserId}, applying...`);
         try {
           // Сохраняем user_id в localStorage
           localStorage.setItem('max_last_user_id', boundUserId);
+          console.log(`💾 Saved userId to localStorage: ${boundUserId}`);
           
           // Обновляем URL с user_id
           const url = new URL(window.location.href);
           url.searchParams.set('user_id', boundUserId);
           window.history.replaceState({}, '', url.toString());
+          console.log(`🔗 Updated URL with userId: ${url.toString()}`);
           
           // Обновляем userIdentity перед проверкой
           const { initializeUserIdentity } = await import('./utils/userIdentity');
           initializeUserIdentity();
+          console.log(`🔄 User identity initialized`);
           
           // Перезагружаем страницу для применения изменений
           // После перезагрузки user_id будет загружен из localStorage
+          console.log(`🔄 Reloading page...`);
           window.location.reload();
           return;
         } catch (err) {
-          console.error('Failed to save user_id:', err);
+          console.error('❌ Failed to save user_id:', err);
         }
       }
       

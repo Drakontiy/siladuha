@@ -110,23 +110,12 @@ const sendMiniAppLink = async (ctx: Context) => {
     const isValidUrl = isSecureMiniAppUrl(urlWithContext);
     console.log('🔍 Checking URL:', urlWithContext, 'Valid:', isValidUrl);
 
-    if (isValidUrl) {
-      await ctx.reply(
-        '👋 Привет! Нажми на кнопку ниже, чтобы открыть мини-приложение:',
-        {
-          attachments: [createMiniAppKeyboard(urlWithContext)],
-        },
-      );
-      console.log('✅ Message sent with inline keyboard');
-    } else {
-      await ctx.reply(
-        `👋 Привет! Мини-приложение доступно по адресу:\n\n${urlWithContext}\n\nНастройте HTTPS URL в .env, чтобы открывать его прямо внутри MAX.`,
-        {
-          attachments: [createMiniAppKeyboard(urlWithContext, '🔗 Открыть в браузере')],
-        },
-      );
-      console.log('⚠️ Fallback message sent with regular link');
-    }
+    // Отправляем приветственное сообщение без кнопки
+    // Пользователь должен использовать встроенную кнопку мини-приложения в мессенджере
+    await ctx.reply(
+      '👋 Привет! Используй встроенную кнопку мини-приложения в мессенджере для доступа к приложению.',
+    );
+    console.log('✅ Welcome message sent');
   } catch (error) {
     console.error('❌ Error while sending mini app link:', error);
     try {
@@ -240,18 +229,25 @@ bot.on('message_callback', async (ctx) => {
   }
 
   const data = callbackData;
+  console.log(`📋 Processing callback data: ${data}`);
 
   if (data.startsWith('bind_')) {
+    console.log(`🔗 Processing bind callback`);
     const parts = data.split('_');
     if (parts.length !== 3) {
+      console.log(`❌ Invalid bind callback format: expected 3 parts, got ${parts.length}`);
       return;
     }
 
     const code = parts[1];
     const userId = parts[2];
+    console.log(`📋 Extracted code: ${code}, userId: ${userId}`);
 
     const user = getUserFromContext(ctx);
+    console.log(`👤 User from context:`, user);
+    
     if (!user?.user_id || String(user.user_id) !== userId) {
+      console.log(`❌ User mismatch: context user_id=${user?.user_id}, callback userId=${userId}`);
       try {
         // Отвечаем на callback с уведомлением об ошибке
         await ctx.answerOnCallback({ notification: '❌ Ошибка: неверный пользователь' });
@@ -266,8 +262,12 @@ bot.on('message_callback', async (ctx) => {
     let bindSuccessful = false;
     let bindError: string | null = null;
     
+    console.log(`🔗 Attempting to bind code: ${code} to userId: ${userId}`);
+    
     try {
       const apiBase = process.env.MINIAPP_API_BASE || 'http://localhost:3000';
+      console.log(`📡 Calling bind API: ${apiBase}/api/auth/bind-code`);
+      
       const bindResponse = await fetch(`${apiBase}/api/auth/bind-code`, {
         method: 'POST',
         headers: {
@@ -276,18 +276,25 @@ bot.on('message_callback', async (ctx) => {
         body: JSON.stringify({ code, userId }),
       });
 
+      console.log(`📡 Bind API response status: ${bindResponse.status}`);
+
       if (!bindResponse.ok) {
         const errorData = await bindResponse.json() as { error?: string };
         bindError = errorData.error || 'Ошибка привязки';
         bindSuccessful = false;
+        console.log(`❌ Bind failed: ${bindError}`);
       } else {
         // Проверяем, что привязка действительно прошла успешно
         const bindData = await bindResponse.json() as { success?: boolean; userId?: string };
+        console.log(`📋 Bind API response data:`, bindData);
+        
         if (bindData.success && bindData.userId === userId) {
           bindSuccessful = true;
+          console.log(`✅ Bind successful: code ${code} bound to userId ${userId}`);
         } else {
           bindError = 'Ошибка при привязке аккаунта';
           bindSuccessful = false;
+          console.log(`❌ Bind response invalid: success=${bindData.success}, userId=${bindData.userId}, expected=${userId}`);
         }
       }
     } catch (bindRequestError) {
@@ -295,13 +302,19 @@ bot.on('message_callback', async (ctx) => {
       // Проверяем, возможно привязка всё же прошла успешно
       try {
         const apiBase = process.env.MINIAPP_API_BASE || 'http://localhost:3000';
+        console.log(`🔍 Verifying bind status for code: ${code}`);
         const checkResponse = await fetch(`${apiBase}/api/auth/check-code/${code}`);
         if (checkResponse.ok) {
           const checkData = await checkResponse.json() as { bound: boolean; userId: string | null };
+          console.log(`🔍 Check code response:`, checkData);
           if (checkData.bound && checkData.userId === userId) {
             bindSuccessful = true;
             console.log('✅ Code was bound successfully (verified after error)');
+          } else {
+            console.log(`❌ Code not bound: bound=${checkData.bound}, userId=${checkData.userId}, expected=${userId}`);
           }
+        } else {
+          console.log(`❌ Check code failed with status: ${checkResponse.status}`);
         }
       } catch (checkError) {
         console.error('Failed to verify bind status:', checkError);
@@ -311,6 +324,8 @@ bot.on('message_callback', async (ctx) => {
         bindError = 'Произошла ошибка при привязке аккаунта';
       }
     }
+    
+    console.log(`📊 Bind result: successful=${bindSuccessful}, error=${bindError}`);
 
     // Теперь отправляем ответы пользователю только если уверены в результате
     if (bindSuccessful) {
@@ -340,19 +355,7 @@ bot.on('message_callback', async (ctx) => {
         }
       }
 
-      // Отправляем ссылку на мини-приложение с user_id
-      try {
-        const urlWithContext = buildMiniAppUrlForContext(ctx);
-        await ctx.reply(
-          '🚀 Откройте мини-приложение:',
-          {
-            attachments: [createMiniAppKeyboard(urlWithContext)],
-          },
-        );
-      } catch (linkError) {
-        console.error('Failed to send mini app link:', linkError);
-        // Не критично, привязка прошла успешно
-      }
+      // Привязка успешна, пользователь может использовать мини-приложение через встроенную кнопку
     } else {
       // Привязка не прошла - отправляем ошибку только если уверены
       const errorMessage = bindError || 'Произошла ошибка при привязке аккаунта';
