@@ -116,6 +116,25 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
     event.preventDefault();
     event.stopPropagation();
     
+    // Блокируем скролл контейнера программно
+    if (scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      const scrollLeft = container.scrollLeft;
+      const scrollTop = container.scrollTop;
+      
+      // Запоминаем текущий скролл и блокируем его
+      container.style.overflowX = 'hidden';
+      container.style.overflowY = 'hidden';
+      
+      // Восстанавливаем позицию скролла после небольшой задержки
+      requestAnimationFrame(() => {
+        if (container) {
+          container.scrollLeft = scrollLeft;
+          container.scrollTop = scrollTop;
+        }
+      });
+    }
+    
     const pointerId = event.pointerId;
     const startX = event.clientX;
     const rect = timelineBarRef.current?.getBoundingClientRect();
@@ -130,12 +149,23 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
       startX,
       initialMinutes: startMinutes,
     });
+
+    // Устанавливаем метку сразу при касании
+    if (!longPressSuppressedClickRef.current) {
+      onLineClick(startMinutes);
+    }
   };
 
   const handleTimelinePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     // Предотвращаем скролл при движении по линии
     event.preventDefault();
     event.stopPropagation();
+    
+    // Продолжаем блокировать скролл
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.style.overflowX = 'hidden';
+      scrollContainerRef.current.style.overflowY = 'hidden';
+    }
   };
 
   const handleTimelinePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -143,27 +173,37 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
     event.preventDefault();
     event.stopPropagation();
     
-    if (longPressSuppressedClickRef.current) {
-      longPressSuppressedClickRef.current = false;
-      return;
+    // Восстанавливаем скролл контейнера
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.style.overflowX = 'auto';
+      scrollContainerRef.current.style.overflowY = 'hidden';
     }
 
     const pointerId = event.pointerId;
     const state = timelineBarPointerStateRef.current.get(pointerId);
     
-    if (!state) {
-      return;
+    if (state) {
+      timelineBarPointerStateRef.current.delete(pointerId);
     }
-
-    timelineBarPointerStateRef.current.delete(pointerId);
     
-    // Устанавливаем метку в начальной позиции касания
-    onLineClick(state.initialMinutes);
+    if (longPressSuppressedClickRef.current) {
+      longPressSuppressedClickRef.current = false;
+    }
   };
 
   const handleTimelinePointerCancel = (event: React.PointerEvent<HTMLDivElement>) => {
+    // Восстанавливаем скролл контейнера
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.style.overflowX = 'auto';
+      scrollContainerRef.current.style.overflowY = 'hidden';
+    }
+    
     const pointerId = event.pointerId;
     timelineBarPointerStateRef.current.delete(pointerId);
+    
+    if (longPressSuppressedClickRef.current) {
+      longPressSuppressedClickRef.current = false;
+    }
   };
 
   const handleSegmentPointerDown = (
@@ -174,8 +214,25 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
     // Предотвращаем скролл при касании сегмента
     event.preventDefault();
     event.stopPropagation();
+    
+    // Блокируем скролл контейнера программно
+    if (scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      const scrollLeft = container.scrollLeft;
+      const scrollTop = container.scrollTop;
+      
+      container.style.overflowX = 'hidden';
+      container.style.overflowY = 'hidden';
+      
+      requestAnimationFrame(() => {
+        if (container) {
+          container.scrollLeft = scrollLeft;
+          container.scrollTop = scrollTop;
+        }
+      });
+    }
+    
     const pointerId = event.pointerId;
-
     const startX = event.clientX;
     const rect = timelineBarRef.current?.getBoundingClientRect();
     
@@ -206,6 +263,13 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
   const handleSegmentPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
+    
+    // Восстанавливаем скролл контейнера
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.style.overflowX = 'auto';
+      scrollContainerRef.current.style.overflowY = 'hidden';
+    }
+    
     const pointerId = event.pointerId;
     const state = pointerStateRef.current.get(pointerId);
     if (!state) {
@@ -225,6 +289,12 @@ const ActivityChart: React.FC<ActivityChartProps> = ({
   };
 
   const handleSegmentPointerCancel = (event: React.PointerEvent<HTMLDivElement>) => {
+    // Восстанавливаем скролл контейнера
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.style.overflowX = 'auto';
+      scrollContainerRef.current.style.overflowY = 'hidden';
+    }
+    
     const pointerId = event.pointerId;
     const state = pointerStateRef.current.get(pointerId);
     if (!state) {
