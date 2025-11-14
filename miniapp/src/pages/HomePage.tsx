@@ -10,7 +10,6 @@ import {
   getCosmeticOptions,
   getCosmeticThemeConfig,
   getHomeBackgroundStyle,
-  getHomeHatStyle,
   getNextCosmeticLevelCost,
   loadHomeState,
   processPendingDays,
@@ -224,19 +223,18 @@ const HomePage: React.FC = () => {
   // 0 дней → sad.svg, 1-7 дней → happy1-7.svg, 8+ дней → happy7.svg
   const getStreakImage = (streak: number): string => {
     if (streak <= 0) {
-      return 'media/sad.svg';
+      return 'media/sad/sad.svg';
     }
     if (streak >= 7) {
-      return 'media/happy7.svg';
+      return 'media/happy/happy7.svg';
     }
-    return `media/happy${streak}.svg`;
+    return `media/happy/happy${streak}.svg`;
   };
   
   const streakImage = getStreakImage(homeState.currentStreak);
   const streakImageAlt = homeState.currentStreak > 0 ? 'Отличное настроение' : 'Пора собраться';
 
   const backgroundStyleDef = useMemo(() => getHomeBackgroundStyle(homeState), [homeState]);
-  const hatStyleDef = useMemo(() => getHomeHatStyle(homeState), [homeState]);
   const homePageStyle = useMemo<React.CSSProperties>(() => {
     if (backgroundStyleDef.kind === 'color') {
       return { backgroundColor: backgroundStyleDef.color };
@@ -253,12 +251,11 @@ const HomePage: React.FC = () => {
     () => getCosmeticOptions(homeState, 'backgrounds'),
     [homeState],
   );
-  const hatOptions = useMemo(() => getCosmeticOptions(homeState, 'hats'), [homeState]);
   const currency = homeState.currency;
   const themeConfig = useMemo(() => getCosmeticThemeConfig(), []);
 
   const buildCustomizationItems = useCallback(
-    (category: 'backgrounds' | 'hats', options: CosmeticOption[]) => {
+    (category: 'backgrounds', options: CosmeticOption[]) => {
       const groups = new Map<AchievementKey, HomeCustomizationItem['levels']>();
       options.forEach((option) => {
         const key = option.source as AchievementKey;
@@ -302,10 +299,6 @@ const HomePage: React.FC = () => {
     () => buildCustomizationItems('backgrounds', backgroundOptions),
     [buildCustomizationItems, backgroundOptions],
   );
-  const hatItems = useMemo(
-    () => buildCustomizationItems('hats', hatOptions),
-    [buildCustomizationItems, hatOptions],
-  );
 
   const customizationSections: HomeCustomizationSection[] = useMemo(() => {
     const sectionsList: HomeCustomizationSection[] = [];
@@ -316,15 +309,8 @@ const HomePage: React.FC = () => {
         items: backgroundItems,
       });
     }
-    if (hatItems.length > 0) {
-      sectionsList.push({
-        category: 'hats',
-        title: 'Головные уборы',
-        items: hatItems,
-      });
-    }
     return sectionsList;
-  }, [backgroundItems, hatItems]);
+  }, [backgroundItems]);
 
   return (
     <div className="home-page" style={homePageStyle}>
@@ -355,9 +341,6 @@ const HomePage: React.FC = () => {
 
       <div className="home-illustration">
         <div className="home-illustration-avatar">
-          {hatStyleDef && hatStyleDef.kind === 'image' && (
-            <img src={hatStyleDef.src} alt="" className="home-illustration-hat" />
-          )}
           <img src={streakImage} alt={streakImageAlt} className="home-illustration-image" />
         </div>
       </div>

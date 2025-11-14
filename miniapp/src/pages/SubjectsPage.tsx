@@ -11,19 +11,38 @@ const ACHIEVEMENTS_CONFIG: Record<
   {
     title: string;
     description: string;
+    visible: boolean;
   }
 > = {
+  workDay: {
+    title: 'Рабочий день',
+    description: 'Проработать 8 часов за день',
+    visible: true,
+  },
   firstGoalCompleted: {
     title: 'Первый шаг',
-    description: 'Выполнить одну цель',
+    description: 'Выполните дневную цель',
+    visible: true,
   },
-  focusEightHours: {
-    title: '8 часов фокуса',
-    description: 'Проработать 8 часов за день',
+  planner: {
+    title: 'Планровщик',
+    description: 'Установите цель на завтра',
+    visible: true,
   },
-  sleepSevenNights: {
-    title: 'Герой сна',
+  sociality: {
+    title: 'Социальность',
+    description: 'Добавьте друга',
+    visible: true,
+  },
+  focus: {
+    title: 'Фокус',
+    description: 'Завершите 30 минут работы',
+    visible: true,
+  },
+  healthySleep: {
+    title: 'Здоровый сон',
     description: 'Проспать 56 часов за неделю',
+    visible: false, // Скрытое достижение
   },
 };
 
@@ -55,16 +74,18 @@ const SubjectsPage: React.FC = () => {
   const homeState = useHomeState();
 
   const achievements = useMemo(() => {
-    return (Object.keys(ACHIEVEMENTS_CONFIG) as AchievementKey[]).map((key) => {
-      const flag = homeState.achievements[key];
-      return {
-        key,
-        title: ACHIEVEMENTS_CONFIG[key].title,
-        description: flag.unlocked ? ACHIEVEMENTS_CONFIG[key].description : '???',
-        unlocked: flag.unlocked,
-        unlockedAtLabel: formatUnlockedAt(flag.unlockedAt),
-      };
-    });
+    return (Object.keys(ACHIEVEMENTS_CONFIG) as AchievementKey[])
+      .filter((key) => ACHIEVEMENTS_CONFIG[key].visible) // Фильтруем только видимые достижения
+      .map((key) => {
+        const flag = homeState.achievements[key];
+        return {
+          key,
+          title: ACHIEVEMENTS_CONFIG[key].title,
+          description: flag.unlocked ? ACHIEVEMENTS_CONFIG[key].description : '???',
+          unlocked: flag.unlocked,
+          unlockedAtLabel: formatUnlockedAt(flag.unlockedAt),
+        };
+      });
   }, [homeState.achievements]);
 
   return (
@@ -115,7 +136,7 @@ const SubjectsPage: React.FC = () => {
         </ul>
       </section>
 
-      <div className="subjects-version">v1.23.0</div>
+      <div className="subjects-version">v1.25.0</div>
     </div>
   );
 };

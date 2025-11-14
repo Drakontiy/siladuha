@@ -17,9 +17,9 @@ interface FriendProfileModalProps {
 
 const getStreakImage = (currentStreak: number) => {
   if (currentStreak > 0) {
-    return { src: 'media/happy1.svg', alt: 'Фокус на высоте' };
+    return { src: 'media/happy/happy1.svg', alt: 'Фокус на высоте' };
   }
-  return { src: 'media/sad.svg', alt: 'Нужно чуть больше старания' };
+  return { src: 'media/sad/sad.svg', alt: 'Нужно чуть больше старания' };
 };
 
 const FriendProfileModal: React.FC<FriendProfileModalProps> = ({

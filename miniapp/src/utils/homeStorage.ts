@@ -42,6 +42,16 @@ export type ThemeLevelDefinition =
   | { kind: 'color'; value: string }
   | { kind: 'image'; value: string };
 
+// Вспомогательная функция для получения первого файла из папки
+const getFirstLevelFromFolder = (folderName: string, maxLevel: number = 10): ThemeLevelDefinition[] => {
+  const levels: ThemeLevelDefinition[] = [];
+  // Первый файл - это первый уровень (бесплатный), остальные можно покупать
+  for (let i = 1; i <= maxLevel; i++) {
+    levels.push({ kind: 'image', value: `media/${folderName}/${folderName}${i}.svg` });
+  }
+  return levels;
+};
+
 const ACHIEVEMENT_THEME_CONFIG: Record<
   AchievementKey,
   {
@@ -50,47 +60,62 @@ const ACHIEVEMENT_THEME_CONFIG: Record<
     baseCost: number;
     title: string;
     description: string;
+    visible: boolean; // Показывать ли достижение на странице предметов
   }
 > = {
+  workDay: {
+    category: 'backgrounds',
+    levels: getFirstLevelFromFolder('green', 10),
+    baseCost: 100,
+    title: 'Рабочий день',
+    description: 'Проработать 8 часов за день',
+    visible: true,
+  },
   firstGoalCompleted: {
     category: 'backgrounds',
-    levels: [
-      { kind: 'image', value: 'media/forest0.svg' },
-      { kind: 'image', value: 'media/forest1.svg' },
-      { kind: 'image', value: 'media/forest2.svg' },
-      { kind: 'image', value: 'media/forest3.svg' },
-    ],
+    levels: getFirstLevelFromFolder('forest', 10),
     baseCost: 100,
     title: 'Первый шаг',
-    description: 'Лесные фоны за первую выполненную цель.',
+    description: 'Выполните дневную цель',
+    visible: true,
   },
-  focusEightHours: {
+  planner: {
     category: 'backgrounds',
-    levels: [
-      { kind: 'color', value: '#ECFDF5' },
-      { kind: 'color', value: '#D1FAE5' },
-      { kind: 'color', value: '#A7F3D0' },
-    ],
-    baseCost: 220,
-    title: '8 часов фокуса',
-    description: 'Зелёные оттенки фокуса за день продуктивной работы.',
+    levels: getFirstLevelFromFolder('blue', 10),
+    baseCost: 100,
+    title: 'Планровщик',
+    description: 'Установите цель на завтра',
+    visible: true,
   },
-  sleepSevenNights: {
+  sociality: {
     category: 'backgrounds',
-    levels: [
-      { kind: 'image', value: 'media/night.svg' },
-      { kind: 'color', value: '#E0E7FF' },
-      { kind: 'color', value: '#C7D2FE' },
-    ],
-    baseCost: 200,
-    title: 'Герой сна',
-    description: 'Глубокие вечерние тона за полноценный отдых.',
+    levels: getFirstLevelFromFolder('red', 10),
+    baseCost: 100,
+    title: 'Социальность',
+    description: 'Добавьте друга',
+    visible: true,
+  },
+  focus: {
+    category: 'backgrounds',
+    levels: getFirstLevelFromFolder('coast', 10),
+    baseCost: 100,
+    title: 'Фокус',
+    description: 'Завершите 30 минут работы',
+    visible: true,
+  },
+  healthySleep: {
+    category: 'backgrounds',
+    levels: getFirstLevelFromFolder('yellow', 10),
+    baseCost: 100,
+    title: 'Здоровый сон',
+    description: 'Проспать 56 часов за неделю',
+    visible: false, // Скрытое достижение
   },
 };
 
 const HOME_BACKGROUND_DEFAULT_COLOR = '#F3F4F6';
 const ACHIEVEMENT_KEYS = Object.keys(ACHIEVEMENT_THEME_CONFIG) as AchievementKey[];
-const COSMETIC_CATEGORIES: CosmeticCategory[] = ['backgrounds', 'hats'];
+const COSMETIC_CATEGORIES: CosmeticCategory[] = ['backgrounds'];
 
 const cloneAchievementFlag = (flag: AchievementFlag): AchievementFlag => ({
   unlocked: flag.unlocked,
@@ -98,9 +123,12 @@ const cloneAchievementFlag = (flag: AchievementFlag): AchievementFlag => ({
 });
 
 const cloneAchievements = (achievements: AchievementsState): AchievementsState => ({
+  workDay: cloneAchievementFlag(achievements.workDay),
   firstGoalCompleted: cloneAchievementFlag(achievements.firstGoalCompleted),
-  focusEightHours: cloneAchievementFlag(achievements.focusEightHours),
-  sleepSevenNights: cloneAchievementFlag(achievements.sleepSevenNights),
+  planner: cloneAchievementFlag(achievements.planner),
+  sociality: cloneAchievementFlag(achievements.sociality),
+  focus: cloneAchievementFlag(achievements.focus),
+  healthySleep: cloneAchievementFlag(achievements.healthySleep),
 });
 
 const cloneGoals = (goals: Record<string, DailyGoalState>): Record<string, DailyGoalState> => {
@@ -152,7 +180,6 @@ const cloneCosmeticCategoryState = (
 
 const cloneCosmetics = (cosmetics: HomeCosmeticsState): HomeCosmeticsState => ({
   backgrounds: cloneCosmeticCategoryState(cosmetics.backgrounds),
-  hats: cloneCosmeticCategoryState(cosmetics.hats),
 });
 
 const cloneState = (state: HomeState): HomeState => ({
@@ -305,13 +332,10 @@ const getNextCosmeticLevelInfo = (
   }
   const definition = theme.levels[nextLevel - 1];
   
-  // Специальная логика для firstGoalCompleted: forest0 бесплатен, остальные стоят 100, 200, 300
-  let cost: number;
-  if (key === 'firstGoalCompleted') {
-    cost = theme.baseCost * (nextLevel - 1);
-  } else {
-    cost = theme.baseCost * nextLevel;
-  }
+  // Логика: первый уровень бесплатен (базовая награда при получении достижения)
+  // Остальные уровни стоят baseCost * (level - 1)
+  // Например: level 2 = 100, level 3 = 200, level 4 = 300 и т.д.
+  const cost: number = theme.baseCost * (nextLevel - 1);
   
   return {
     level: nextLevel,
@@ -449,9 +473,65 @@ const unlockAchievement = (state: HomeState, key: keyof AchievementsState): bool
   return true;
 };
 
+// Проверка завершения 30 минут работы
+const hasCompleted30MinutesWork = (referenceDate: Date): boolean => {
+  const today = getStartOfDay(referenceDate);
+  const dayActivity = getDayActivity(today);
+  
+  // Проверяем интервалы продуктивной работы длительностью 30 минут или больше
+  const marksMap = new Map<string, TimeMark>();
+  dayActivity.marks.forEach(mark => marksMap.set(mark.id, mark));
+  
+  const getMinuteForMark = (markId: string): number => {
+    if (markId === VIRTUAL_START_ID) return 0;
+    if (markId === VIRTUAL_END_ID) return DAY_TOTAL_MINUTES;
+    const mark = marksMap.get(markId);
+    return mark ? mark.timestamp : 0;
+  };
+  
+  for (const interval of dayActivity.intervals) {
+    if (interval.type === 'productive') {
+      const startMinute = getMinuteForMark(interval.startMarkId);
+      const endMinute = getMinuteForMark(interval.endMarkId);
+      if (endMinute > startMinute && (endMinute - startMinute) >= 30) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
+// Проверка наличия друзей
+const hasFriends = (): boolean => {
+  try {
+    const { getSocialState } = require('./userStateSync');
+    const socialState = getSocialState();
+    return socialState && socialState.friends && socialState.friends.length > 0;
+  } catch {
+    return false;
+  }
+};
+
+// Проверка установки цели на завтра
+const hasGoalSetForTomorrow = (state: HomeState, referenceDate: Date): boolean => {
+  const tomorrow = addDays(getStartOfDay(referenceDate), 1);
+  const tomorrowKey = getDateKey(tomorrow);
+  const tomorrowGoal = state.goals[tomorrowKey];
+  return tomorrowGoal && tomorrowGoal.targetMinutes > 0;
+};
+
 const evaluateAchievements = (state: HomeState, referenceDate: Date): boolean => {
   let changed = false;
 
+  // Рабочий день - проработать 8 часов за день
+  if (
+    !state.achievements.workDay.unlocked &&
+    hasProductiveDayWithMinutes(referenceDate, PRODUCTIVE_ACHIEVEMENT_LOOKBACK_DAYS, EIGHT_HOUR_MINUTES)
+  ) {
+    changed = unlockAchievement(state, 'workDay') || changed;
+  }
+
+  // Первый шаг - выполните дневную цель
   if (
     !state.achievements.firstGoalCompleted.unlocked &&
     Object.values(state.goals).some((goal) => goal?.completed)
@@ -459,21 +539,39 @@ const evaluateAchievements = (state: HomeState, referenceDate: Date): boolean =>
     changed = unlockAchievement(state, 'firstGoalCompleted') || changed;
   }
 
+  // Планровщик - установите цель на завтра
   if (
-    !state.achievements.focusEightHours.unlocked &&
-    hasProductiveDayWithMinutes(referenceDate, PRODUCTIVE_ACHIEVEMENT_LOOKBACK_DAYS, EIGHT_HOUR_MINUTES)
+    !state.achievements.planner.unlocked &&
+    hasGoalSetForTomorrow(state, referenceDate)
   ) {
-    changed = unlockAchievement(state, 'focusEightHours') || changed;
+    changed = unlockAchievement(state, 'planner') || changed;
   }
 
-  if (!state.achievements.sleepSevenNights.unlocked) {
+  // Социальность - добавьте друга
+  if (
+    !state.achievements.sociality.unlocked &&
+    hasFriends()
+  ) {
+    changed = unlockAchievement(state, 'sociality') || changed;
+  }
+
+  // Фокус - завершите 30 минут работы
+  if (
+    !state.achievements.focus.unlocked &&
+    hasCompleted30MinutesWork(referenceDate)
+  ) {
+    changed = unlockAchievement(state, 'focus') || changed;
+  }
+
+  // Здоровый сон - проспать 56 часов за неделю (скрыто)
+  if (!state.achievements.healthySleep.unlocked) {
     const totalSleepMinutes = sumActivityMinutesOverRange(
       referenceDate,
       SLEEP_ACHIEVEMENT_LOOKBACK_DAYS,
       'sleep',
     );
     if (totalSleepMinutes >= SLEEP_WEEK_MINUTES) {
-      changed = unlockAchievement(state, 'sleepSevenNights') || changed;
+      changed = unlockAchievement(state, 'healthySleep') || changed;
     }
   }
 
@@ -682,9 +780,6 @@ export const getActiveCosmeticStyle = (state: HomeState, category: CosmeticCateg
 export const getHomeBackgroundStyle = (state: HomeState): CosmeticStyle =>
   getActiveCosmeticStyle(state, 'backgrounds') ?? { kind: 'color', color: HOME_BACKGROUND_DEFAULT_COLOR };
 
-export const getHomeHatStyle = (state: HomeState): CosmeticStyle | null =>
-  getActiveCosmeticStyle(state, 'hats');
-
 export interface CosmeticOption {
   category: CosmeticCategory;
   source: AchievementKey;
@@ -812,7 +907,6 @@ export const getCosmeticThemeConfig = () => ACHIEVEMENT_THEME_CONFIG;
 export const getHomeBackgroundOptions = (state: HomeState) =>
   getCosmeticOptions(state, 'backgrounds');
 
-export const getHomeHatOptions = (state: HomeState) => getCosmeticOptions(state, 'hats');
 
 export const purchaseHomeBackgroundLevel = purchaseCosmeticLevel;
 

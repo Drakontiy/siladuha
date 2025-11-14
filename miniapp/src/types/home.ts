@@ -13,9 +13,12 @@ export interface AchievementFlag {
 }
 
 export interface AchievementsState {
-  firstGoalCompleted: AchievementFlag;
-  focusEightHours: AchievementFlag;
-  sleepSevenNights: AchievementFlag;
+  workDay: AchievementFlag; // Рабочий день - проработать 8 часов за день
+  firstGoalCompleted: AchievementFlag; // Первый шаг - выполните дневную цель
+  planner: AchievementFlag; // Планровщик - установите цель на завтра
+  sociality: AchievementFlag; // Социальность - добавьте друга
+  focus: AchievementFlag; // Фокус - завершите 30 минут работы
+  healthySleep: AchievementFlag; // Здоровый сон - проспать 56 часов за неделю (скрыто)
 }
 
 export type AchievementKey = keyof AchievementsState;
@@ -25,7 +28,7 @@ export interface CosmeticThemeProgress {
   currentLevel: number;
 }
 
-export type CosmeticCategory = 'backgrounds' | 'hats';
+export type CosmeticCategory = 'backgrounds';
 
 export interface CosmeticCategoryState {
   byAchievement: Partial<Record<AchievementKey, CosmeticThemeProgress>>;
@@ -34,7 +37,6 @@ export interface CosmeticCategoryState {
 
 export interface HomeCosmeticsState {
   backgrounds: CosmeticCategoryState;
-  hats: CosmeticCategoryState;
 }
 
 export interface HomeState {
@@ -52,16 +54,15 @@ export const DEFAULT_HOME_STATE: HomeState = {
   currency: 0,
   goals: {},
   achievements: {
+    workDay: { unlocked: false, unlockedAt: null },
     firstGoalCompleted: { unlocked: false, unlockedAt: null },
-    focusEightHours: { unlocked: false, unlockedAt: null },
-    sleepSevenNights: { unlocked: false, unlockedAt: null },
+    planner: { unlocked: false, unlockedAt: null },
+    sociality: { unlocked: false, unlockedAt: null },
+    focus: { unlocked: false, unlockedAt: null },
+    healthySleep: { unlocked: false, unlockedAt: null },
   },
   cosmetics: {
     backgrounds: {
-      byAchievement: {},
-      activeSelection: null,
-    },
-    hats: {
       byAchievement: {},
       activeSelection: null,
     },

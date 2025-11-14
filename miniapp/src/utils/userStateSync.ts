@@ -27,9 +27,12 @@ const cloneAchievementFlag = (flag: HomeState['achievements']['firstGoalComplete
 });
 
 const cloneAchievements = (achievements: HomeState['achievements']): HomeState['achievements'] => ({
+  workDay: cloneAchievementFlag(achievements.workDay),
   firstGoalCompleted: cloneAchievementFlag(achievements.firstGoalCompleted),
-  focusEightHours: cloneAchievementFlag(achievements.focusEightHours),
-  sleepSevenNights: cloneAchievementFlag(achievements.sleepSevenNights),
+  planner: cloneAchievementFlag(achievements.planner),
+  sociality: cloneAchievementFlag(achievements.sociality),
+  focus: cloneAchievementFlag(achievements.focus),
+  healthySleep: cloneAchievementFlag(achievements.healthySleep),
 });
 
 const cloneGoals = (goals: HomeState['goals']): HomeState['goals'] => {
@@ -81,7 +84,6 @@ const cloneCosmeticCategoryState = (
 
 const cloneCosmetics = (cosmetics: HomeState['cosmetics']): HomeState['cosmetics'] => ({
   backgrounds: cloneCosmeticCategoryState(cosmetics.backgrounds),
-  hats: cloneCosmeticCategoryState(cosmetics.hats),
 });
 
 const cloneHomeState = (state: HomeState): HomeState => ({
