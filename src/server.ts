@@ -454,25 +454,68 @@ app.get(`${API_BASE_PATH}/user/:userId/state`, async (req, res) => {
 app.post(`${API_BASE_PATH}/user/:userId/state`, async (req, res) => {
   const userId = sanitizeUserId(req.params.userId);
   if (!userId) {
+    console.error('❌ [SERVER] Invalid user ID in POST /api/user/:userId/state');
     res.status(400).json({ error: 'Invalid user id' });
     return;
   }
 
+  console.log('🟢 [SERVER] POST /api/user/:userId/state for user:', userId);
+
   const payload = (req.body ?? {}) as Partial<StoredUserState>;
 
+  console.log('🟡 [SERVER] Incoming payload structure:', {
+    hasActivityData: !!payload.activityData,
+    hasHomeState: !!payload.homeState,
+    hasSocial: !!payload.social,
+  });
+
+  if (payload.homeState) {
+    console.log('🟡 [SERVER] Incoming homeState structure:', {
+      hasCosmetics: !!payload.homeState.cosmetics,
+      hasBackgrounds: !!payload.homeState.cosmetics?.backgrounds,
+      hasHats: !!payload.homeState.cosmetics?.hats,
+      achievements: Object.keys(payload.homeState.achievements || {}),
+    });
+  }
+
   try {
+    console.log('🟡 [SERVER] Reading existing state...');
     const existingState = await readUserState(userId);
+    console.log('🟢 [SERVER] Existing state read successfully');
+    console.log('🟡 [SERVER] Existing homeState structure:', {
+      hasCosmetics: !!existingState.homeState?.cosmetics,
+      hasBackgrounds: !!existingState.homeState?.cosmetics?.backgrounds,
+      hasHats: !!existingState.homeState?.cosmetics?.hats,
+      achievements: Object.keys(existingState.homeState?.achievements || {}),
+    });
+
+    console.log('🟡 [SERVER] Preparing new state...');
+    const newHomeState = payload.homeState ?? existingState.homeState ?? cloneDefaultHomeState();
+    console.log('🟡 [SERVER] New homeState structure:', {
+      hasCosmetics: !!newHomeState.cosmetics,
+      hasBackgrounds: !!newHomeState.cosmetics?.backgrounds,
+      hasHats: !!newHomeState.cosmetics?.hats,
+      achievements: Object.keys(newHomeState.achievements || {}),
+    });
+
+    console.log('🟡 [SERVER] Cloning states...');
+    const clonedHomeState = cloneStoredHomeState(newHomeState);
+    console.log('🟢 [SERVER] States cloned successfully');
+
+    console.log('🟡 [SERVER] Writing user state...');
     const nextState = await writeUserState(userId, {
       activityData: payload.activityData ?? existingState.activityData,
-      homeState: payload.homeState ?? existingState.homeState ?? cloneDefaultHomeState(),
+      homeState: clonedHomeState,
       social: payload.social ?? existingState.social ?? cloneDefaultSocialState(),
       updatedAt: existingState.updatedAt,
     });
+    console.log('🟢 [SERVER] User state written successfully');
 
     res.setHeader('Cache-Control', 'no-store');
     res.json(nextState);
   } catch (error) {
-    console.error('❌ Failed to write user state:', error);
+    console.error('❌ [SERVER] Failed to write user state:', error);
+    console.error('❌ [SERVER] Error details:', error instanceof Error ? error.stack : String(error));
     res.status(500).json({ error: 'Failed to write user state' });
   }
 });

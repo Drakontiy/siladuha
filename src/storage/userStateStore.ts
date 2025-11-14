@@ -528,6 +528,20 @@ export const readUserState = async (userId: string): Promise<StoredUserState> =>
 };
 
 export const writeUserState = async (userId: string, state: StoredUserState): Promise<StoredUserState> => {
+  console.log('🟡 [STORAGE] writeUserState called for user:', userId);
+  console.log('🟡 [STORAGE] State structure:', {
+    hasActivityData: !!state.activityData,
+    hasHomeState: !!state.homeState,
+    hasSocial: !!state.social,
+  });
+  if (state.homeState) {
+    console.log('🟡 [STORAGE] HomeState structure:', {
+      hasCosmetics: !!state.homeState.cosmetics,
+      hasBackgrounds: !!state.homeState.cosmetics?.backgrounds,
+      hasHats: !!state.homeState.cosmetics?.hats,
+      achievements: Object.keys(state.homeState.achievements || {}),
+    });
+  }
   await ensureDataDir();
 
   const sanitized = sanitizeUserState(state);

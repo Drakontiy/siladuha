@@ -250,32 +250,54 @@ const updateSyncStatus = (patch: Partial<SyncStatus>) => {
 
 const performSync = async () => {
   if (activeUserId === DEFAULT_USER_ID) {
+    console.log('🔵 [SYNC] Skipping sync: default user ID');
     return;
   }
 
   if (syncStatus.isSyncing) {
+    console.log('🔵 [SYNC] Sync already in progress, marking as pending');
     syncPending = true;
     return;
   }
 
+  console.log('🟢 [SYNC] Starting sync for user:', activeUserId);
   updateSyncStatus({ isSyncing: true, error: undefined });
 
   try {
-    const response = await fetch(buildEndpoint(`/api/user/${encodeURIComponent(activeUserId)}/state`), {
+    const endpoint = buildEndpoint(`/api/user/${encodeURIComponent(activeUserId)}/state`);
+    console.log('🟢 [SYNC] Sending POST request to:', endpoint);
+    
+    // Проверяем структуру homeState перед отправкой
+    console.log('🟢 [SYNC] HomeState structure:', {
+      hasCosmetics: !!homeState.cosmetics,
+      hasBackgrounds: !!homeState.cosmetics?.backgrounds,
+      hasHats: !!homeState.cosmetics?.hats,
+      achievements: Object.keys(homeState.achievements || {}),
+    });
+
+    const requestBody = {
+      activityData,
+      homeState,
+      social: socialState,
+    };
+    
+    console.log('🟢 [SYNC] Request body size:', JSON.stringify(requestBody).length, 'bytes');
+    
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       credentials: 'include',
-      body: JSON.stringify({
-        activityData,
-        homeState,
-        social: socialState,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
+    console.log('🟡 [SYNC] Response status:', response.status, response.statusText);
+
     if (!response.ok) {
-      throw new Error(`Sync failed with status ${response.status}`);
+      const errorText = await response.text();
+      console.error('❌ [SYNC] Server error response:', errorText);
+      throw new Error(`Sync failed with status ${response.status}: ${errorText.substring(0, 200)}`);
     }
 
     const payload = (await response.json()) as {
@@ -285,32 +307,52 @@ const performSync = async () => {
       updatedAt?: string;
     };
 
+    console.log('🟡 [SYNC] Received payload:', {
+      hasActivityData: !!payload.activityData,
+      hasHomeState: !!payload.homeState,
+      hasSocial: !!payload.social,
+      updatedAt: payload.updatedAt,
+    });
+
     if (payload.activityData) {
+      console.log('🟢 [SYNC] Updating activityData');
       activityData = cloneActivityData(payload.activityData);
       writeLocalJson('activity_data', activityData);
     }
     if (payload.homeState) {
+      console.log('🟢 [SYNC] Updating homeState');
       // Безопасная загрузка с миграцией
       try {
+        console.log('🟡 [SYNC] HomeState from server structure:', {
+          hasCosmetics: !!payload.homeState.cosmetics,
+          hasBackgrounds: !!payload.homeState.cosmetics?.backgrounds,
+          hasHats: !!payload.homeState.cosmetics?.hats,
+          achievements: Object.keys(payload.homeState.achievements || {}),
+        });
         homeState = cloneHomeState(payload.homeState);
+        console.log('🟢 [SYNC] HomeState cloned successfully');
         writeLocalJson('home_state', homeState);
       } catch (error) {
-        console.error('Error cloning home state from server:', error);
+        console.error('❌ [SYNC] Error cloning home state from server:', error);
+        console.error('❌ [SYNC] Error details:', error instanceof Error ? error.stack : String(error));
         // Если ошибка, используем текущее локальное состояние
       }
     }
     if (payload.social) {
+      console.log('🟢 [SYNC] Updating social');
       socialState = cloneSocialState(payload.social);
       writeLocalJson('social_state', socialState);
     }
 
+    console.log('✅ [SYNC] Sync completed successfully');
     updateSyncStatus({
       isSyncing: false,
       lastSyncedAt: payload.updatedAt ?? new Date().toISOString(),
       error: undefined,
     });
   } catch (error) {
-    console.error('Failed to sync user state:', error);
+    console.error('❌ [SYNC] Failed to sync user state:', error);
+    console.error('❌ [SYNC] Error details:', error instanceof Error ? error.stack : String(error));
     updateSyncStatus({
       isSyncing: false,
       error: error instanceof Error ? error.message : 'Unknown sync error',
@@ -318,6 +360,7 @@ const performSync = async () => {
   } finally {
     syncStatus.isSyncing = false;
     if (syncPending) {
+      console.log('🟡 [SYNC] Processing pending sync');
       syncPending = false;
       scheduleSync();
     }
