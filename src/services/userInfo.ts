@@ -87,13 +87,17 @@ export const updateFriendNames = async (
 
     try {
       const userName = await getUserNameFromBot(friend.userId);
-      if (userName && userName !== friend.displayName) {
-        updatedFriends[index] = {
-          ...friend,
-          displayName: userName,
-          updatedAt: new Date().toISOString(),
-        };
-        hasUpdates = true;
+      if (userName) {
+        // Сохраняем имя, даже если оно уже было (может обновиться)
+        if (userName !== friend.displayName) {
+          updatedFriends[index] = {
+            ...friend,
+            displayName: userName,
+            updatedAt: new Date().toISOString(),
+          };
+          hasUpdates = true;
+          console.log(`✅ Updated name for friend ${friend.userId}: ${friend.displayName || 'null'} -> ${userName}`);
+        }
       }
     } catch (error) {
       // Игнорируем ошибки при обновлении отдельного имени
@@ -134,12 +138,16 @@ export const updateFriendRequestNames = async (
 
     try {
       const userName = await getUserNameFromBot(request.counterpartId);
-      if (userName && userName !== request.counterpartName) {
-        updatedRequests[index] = {
-          ...request,
-          counterpartName: userName,
-        };
-        hasUpdates = true;
+      if (userName) {
+        // Сохраняем имя, даже если оно уже было (может обновиться)
+        if (userName !== request.counterpartName) {
+          updatedRequests[index] = {
+            ...request,
+            counterpartName: userName,
+          };
+          hasUpdates = true;
+          console.log(`✅ Updated name for request ${request.id}: ${request.counterpartId} -> ${userName}`);
+        }
       }
     } catch (error) {
       // Игнорируем ошибки при обновлении отдельного имени

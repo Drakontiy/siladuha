@@ -438,15 +438,23 @@ app.get(`${API_BASE_PATH}/user/:userId/state`, async (req, res) => {
     const state = await readUserState(userId);
     
     // Автоматически обновляем имена друзей через бота (только для отсутствующих имён)
-    let updatedSocial = state.social;
+    let updatedSocial = { ...state.social };
+    let hasChanges = false;
+    
     if (state.social?.friends && state.social.friends.length > 0) {
       try {
         const updatedFriends = await updateFriendNames(state.social.friends, false);
-        if (updatedFriends !== state.social.friends) {
+        // Проверяем, были ли реальные изменения в именах
+        const namesChanged = updatedFriends.some((friend, index) => 
+          friend.displayName !== state.social.friends[index]?.displayName
+        );
+        if (namesChanged) {
           updatedSocial = {
             ...updatedSocial,
             friends: updatedFriends,
           };
+          hasChanges = true;
+          console.log(`✅ Updated ${updatedFriends.filter(f => f.displayName).length} friend names`);
         }
       } catch (updateError) {
         // Игнорируем ошибки обновления имён, чтобы не блокировать ответ
@@ -458,11 +466,17 @@ app.get(`${API_BASE_PATH}/user/:userId/state`, async (req, res) => {
     if (state.social?.friendRequests && state.social.friendRequests.length > 0) {
       try {
         const updatedRequests = await updateFriendRequestNames(state.social.friendRequests, false);
-        if (updatedRequests !== state.social.friendRequests) {
+        // Проверяем, были ли реальные изменения в именах
+        const namesChanged = updatedRequests.some((request, index) => 
+          request.counterpartName !== state.social.friendRequests[index]?.counterpartName
+        );
+        if (namesChanged) {
           updatedSocial = {
             ...updatedSocial,
             friendRequests: updatedRequests,
           };
+          hasChanges = true;
+          console.log(`✅ Updated ${updatedRequests.filter(r => r.counterpartName).length} friend request names`);
         }
       } catch (updateError) {
         // Игнорируем ошибки обновления имён, чтобы не блокировать ответ
@@ -471,7 +485,8 @@ app.get(`${API_BASE_PATH}/user/:userId/state`, async (req, res) => {
     }
     
     // Сохраняем обновлённое состояние только если были изменения
-    if (updatedSocial !== state.social) {
+    if (hasChanges) {
+      console.log(`💾 Saving updated social state for user ${userId}`);
       await writeUserState(userId, {
         ...state,
         social: updatedSocial,
@@ -649,10 +664,30 @@ app.post(`${API_BASE_PATH}/user/:userId/friends/request`, async (req, res) => {
     const now = new Date().toISOString();
     const requestId = randomUUID();
 
+    // Получаем имя цели из бота, если оно не было передано
+    let finalTargetName = targetName;
+    if (!finalTargetName) {
+      try {
+        finalTargetName = await getUserNameFromBot(targetUserId);
+      } catch (error) {
+        console.warn(`⚠️ Failed to get target name for ${targetUserId}:`, error);
+      }
+    }
+    
+    // Получаем имя запрашивающего из бота, если оно не было передано
+    let finalRequesterName = requesterName;
+    if (!finalRequesterName) {
+      try {
+        finalRequesterName = await getUserNameFromBot(userId);
+      } catch (error) {
+        console.warn(`⚠️ Failed to get requester name for ${userId}:`, error);
+      }
+    }
+
     const outgoingRequest: StoredFriendRequest = {
       id: requestId,
       counterpartId: targetUserId,
-      counterpartName: targetName,
+      counterpartName: finalTargetName,
       direction: 'outgoing',
       status: 'pending',
       createdAt: now,
@@ -662,7 +697,7 @@ app.post(`${API_BASE_PATH}/user/:userId/friends/request`, async (req, res) => {
     const incomingRequest: StoredFriendRequest = {
       id: requestId,
       counterpartId: userId,
-      counterpartName: requesterName,
+      counterpartName: finalRequesterName,
       direction: 'incoming',
       status: 'pending',
       createdAt: now,
@@ -763,9 +798,29 @@ app.post(`${API_BASE_PATH}/user/:userId/friends/request/:requestId/respond`, asy
       const counterpartFriendExisting = counterpartSocial.friends.find((friend) => friend.userId === userId);
       const userFriendExisting = social.friends.find((friend) => friend.userId === counterpartId);
 
+      // Получаем имя из заявки или из бота
+      let counterpartDisplayName = request.counterpartName;
+      if (!counterpartDisplayName) {
+        try {
+          counterpartDisplayName = await getUserNameFromBot(counterpartId);
+        } catch (error) {
+          console.warn(`⚠️ Failed to get counterpart name for ${counterpartId}:`, error);
+        }
+      }
+      
+      // Получаем имя отвечающего из переданного имени или из бота
+      let responderDisplayName = responderName;
+      if (!responderDisplayName) {
+        try {
+          responderDisplayName = await getUserNameFromBot(userId);
+        } catch (error) {
+          console.warn(`⚠️ Failed to get responder name for ${userId}:`, error);
+        }
+      }
+
       const userFriend: StoredFriend = {
         userId: counterpartId,
-        displayName: request.counterpartName ?? null,
+        displayName: counterpartDisplayName ?? null,
         shareMyStatsWith: userFriendExisting?.shareMyStatsWith ?? false,
         shareTheirStatsWithMe: counterpartFriendExisting?.shareMyStatsWith ?? false,
         createdAt: userFriendExisting?.createdAt ?? now,
@@ -774,7 +829,7 @@ app.post(`${API_BASE_PATH}/user/:userId/friends/request/:requestId/respond`, asy
 
       const counterpartFriend: StoredFriend = {
         userId,
-        displayName: responderName ?? null,
+        displayName: responderDisplayName ?? null,
         shareMyStatsWith: counterpartFriendExisting?.shareMyStatsWith ?? false,
         shareTheirStatsWithMe: userFriend.shareMyStatsWith,
         createdAt: counterpartFriendExisting?.createdAt ?? now,
