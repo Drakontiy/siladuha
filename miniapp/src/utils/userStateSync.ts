@@ -26,14 +26,52 @@ const cloneAchievementFlag = (flag: HomeState['achievements']['firstGoalComplete
   unlockedAt: flag.unlockedAt,
 });
 
-const cloneAchievements = (achievements: HomeState['achievements']): HomeState['achievements'] => ({
-  workDay: cloneAchievementFlag(achievements.workDay),
-  firstGoalCompleted: cloneAchievementFlag(achievements.firstGoalCompleted),
-  planner: cloneAchievementFlag(achievements.planner),
-  sociality: cloneAchievementFlag(achievements.sociality),
-  focus: cloneAchievementFlag(achievements.focus),
-  healthySleep: cloneAchievementFlag(achievements.healthySleep),
-});
+const cloneAchievements = (achievements: HomeState['achievements']): HomeState['achievements'] => {
+  // Миграция старых достижений в новый формат
+  const oldAchievements = achievements as any; // временно используем any для миграции
+  
+  // Создаём новый объект с дефолтными значениями
+  const newAchievements: HomeState['achievements'] = {
+    workDay: { unlocked: false, unlockedAt: null },
+    firstGoalCompleted: { unlocked: false, unlockedAt: null },
+    planner: { unlocked: false, unlockedAt: null },
+    sociality: { unlocked: false, unlockedAt: null },
+    focus: { unlocked: false, unlockedAt: null },
+    healthySleep: { unlocked: false, unlockedAt: null },
+  };
+  
+  // Мигрируем существующие достижения
+  if (oldAchievements.firstGoalCompleted) {
+    newAchievements.firstGoalCompleted = cloneAchievementFlag(oldAchievements.firstGoalCompleted);
+  }
+  
+  // Миграция focusEightHours -> workDay
+  if (oldAchievements.focusEightHours) {
+    newAchievements.workDay = cloneAchievementFlag(oldAchievements.focusEightHours);
+  } else if (oldAchievements.workDay) {
+    newAchievements.workDay = cloneAchievementFlag(oldAchievements.workDay);
+  }
+  
+  // Миграция sleepSevenNights -> healthySleep
+  if (oldAchievements.sleepSevenNights) {
+    newAchievements.healthySleep = cloneAchievementFlag(oldAchievements.sleepSevenNights);
+  } else if (oldAchievements.healthySleep) {
+    newAchievements.healthySleep = cloneAchievementFlag(oldAchievements.healthySleep);
+  }
+  
+  // Копируем новые достижения, если они есть
+  if (oldAchievements.planner) {
+    newAchievements.planner = cloneAchievementFlag(oldAchievements.planner);
+  }
+  if (oldAchievements.sociality) {
+    newAchievements.sociality = cloneAchievementFlag(oldAchievements.sociality);
+  }
+  if (oldAchievements.focus) {
+    newAchievements.focus = cloneAchievementFlag(oldAchievements.focus);
+  }
+  
+  return newAchievements;
+};
 
 const cloneGoals = (goals: HomeState['goals']): HomeState['goals'] => {
   const result: HomeState['goals'] = {};
@@ -82,18 +120,39 @@ const cloneCosmeticCategoryState = (
   };
 };
 
-const cloneCosmetics = (cosmetics: HomeState['cosmetics']): HomeState['cosmetics'] => ({
-  backgrounds: cloneCosmeticCategoryState(cosmetics.backgrounds),
-});
+const cloneCosmetics = (cosmetics: HomeState['cosmetics']): HomeState['cosmetics'] => {
+  // Миграция: убираем hats категорию, если она есть в старых данных
+  const oldCosmetics = cosmetics as any;
+  
+  return {
+    backgrounds: oldCosmetics.backgrounds 
+      ? cloneCosmeticCategoryState(oldCosmetics.backgrounds)
+      : { byAchievement: {}, activeSelection: null },
+  };
+};
 
-const cloneHomeState = (state: HomeState): HomeState => ({
-  currentStreak: state.currentStreak,
-  lastProcessedDate: state.lastProcessedDate,
-  currency: state.currency,
-  goals: cloneGoals(state.goals),
-  achievements: cloneAchievements(state.achievements),
-  cosmetics: cloneCosmetics(state.cosmetics),
-});
+const cloneHomeState = (state: HomeState | any): HomeState => {
+  // Безопасное клонирование с обработкой миграции
+  const oldState = state || {};
+  
+  return {
+    currentStreak: typeof oldState.currentStreak === 'number' ? oldState.currentStreak : 0,
+    lastProcessedDate: oldState.lastProcessedDate || null,
+    currency: typeof oldState.currency === 'number' ? oldState.currency : 0,
+    goals: oldState.goals ? cloneGoals(oldState.goals) : {},
+    achievements: oldState.achievements ? cloneAchievements(oldState.achievements) : {
+      workDay: { unlocked: false, unlockedAt: null },
+      firstGoalCompleted: { unlocked: false, unlockedAt: null },
+      planner: { unlocked: false, unlockedAt: null },
+      sociality: { unlocked: false, unlockedAt: null },
+      focus: { unlocked: false, unlockedAt: null },
+      healthySleep: { unlocked: false, unlockedAt: null },
+    },
+    cosmetics: oldState.cosmetics ? cloneCosmetics(oldState.cosmetics) : {
+      backgrounds: { byAchievement: {}, activeSelection: null },
+    },
+  };
+};
 
 let homeState: HomeState = cloneHomeState(DEFAULT_HOME_STATE);
 let socialState: SocialState = {
@@ -227,8 +286,14 @@ const performSync = async () => {
       writeLocalJson('activity_data', activityData);
     }
     if (payload.homeState) {
-      homeState = cloneHomeState(payload.homeState);
-      writeLocalJson('home_state', homeState);
+      // Безопасная загрузка с миграцией
+      try {
+        homeState = cloneHomeState(payload.homeState);
+        writeLocalJson('home_state', homeState);
+      } catch (error) {
+        console.error('Error cloning home state from server:', error);
+        // Если ошибка, используем текущее локальное состояние
+      }
     }
     if (payload.social) {
       socialState = cloneSocialState(payload.social);
@@ -279,7 +344,22 @@ export const initializeUserStateSync = async (): Promise<void> => {
   activeUserId = user.userId ?? DEFAULT_USER_ID;
 
   activityData = cloneActivityData(readLocalJson<ActivityData>('activity_data', {}));
-  homeState = cloneHomeState(readLocalJson<HomeState>('home_state', DEFAULT_HOME_STATE));
+  
+  // Безопасная загрузка homeState с миграцией
+  try {
+    const loadedState = readLocalJson<any>('home_state', null);
+    if (loadedState) {
+      homeState = cloneHomeState(loadedState);
+      // Сохраняем мигрированное состояние обратно
+      writeLocalJson('home_state', homeState);
+    } else {
+      homeState = cloneHomeState(DEFAULT_HOME_STATE);
+    }
+  } catch (error) {
+    console.error('Error loading home state, using default:', error);
+    homeState = cloneHomeState(DEFAULT_HOME_STATE);
+  }
+  
   socialState = cloneSocialState(readLocalJson<SocialState>('social_state', { ...DEFAULT_SOCIAL_STATE }));
 
   if (activeUserId === DEFAULT_USER_ID) {
