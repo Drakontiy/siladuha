@@ -22,12 +22,17 @@
   width: 100%;
   max-width: 360px;
   flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 20px;
+  border-radius: 18px;
+  backdrop-filter: blur(10px);
 }
 
 .home-title {
   font-size: 28px;
   font-weight: 600;
   color: #1d2939;
+  margin: 0;
 }
 
 .home-goal-button {
@@ -153,6 +158,10 @@
 @media (max-width: 380px) {
   .home-page {
     padding: 32px 20px 24px;
+  }
+
+  .home-header {
+    padding: 16px;
   }
 
   .home-title {

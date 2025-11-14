@@ -59,7 +59,7 @@ body {
   height: 100vh;
   max-height: 100vh;
   overflow: hidden;
-  background: #ffffff;
+  background: transparent;
   margin: 0 auto;
   max-width: 428px;
   position: relative;
