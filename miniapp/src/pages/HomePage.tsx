@@ -10,6 +10,7 @@ import {
   getCosmeticOptions,
   getCosmeticThemeConfig,
   getHomeBackgroundStyle,
+  getHomeHatStyle,
   getNextCosmeticLevelCost,
   loadHomeState,
   processPendingDays,
@@ -239,6 +240,7 @@ const HomePage: React.FC = () => {
   const streakImageAlt = homeState.currentStreak > 0 ? 'Отличное настроение' : 'Пора собраться';
 
   const backgroundStyleDef = useMemo(() => getHomeBackgroundStyle(homeState), [homeState]);
+  const hatStyleDef = useMemo(() => getHomeHatStyle(homeState), [homeState]);
   const homePageStyle = useMemo<React.CSSProperties>(() => {
     if (backgroundStyleDef.kind === 'color') {
       return { backgroundColor: backgroundStyleDef.color };
@@ -255,14 +257,31 @@ const HomePage: React.FC = () => {
     () => getCosmeticOptions(homeState, 'backgrounds'),
     [homeState],
   );
+  const hatOptions = useMemo(
+    () => getCosmeticOptions(homeState, 'hats'),
+    [homeState],
+  );
   const currency = homeState.currency;
   const themeConfig = useMemo(() => getCosmeticThemeConfig(), []);
 
   const buildCustomizationItems = useCallback(
-    (category: 'backgrounds', options: CosmeticOption[]) => {
-      const groups = new Map<AchievementKey, HomeCustomizationItem['levels']>();
+    (category: 'backgrounds' | 'hats', options: CosmeticOption[]) => {
+      const groups = new Map<AchievementKey | '__none__', HomeCustomizationItem['levels']>();
+      
       options.forEach((option) => {
-        const key = option.source as AchievementKey;
+        const key = option.source as AchievementKey | '__none__';
+        
+        // Для '__none__' всегда показываем, даже если нет стиля
+        if (key === '__none__') {
+          groups.set(key, [{
+            level: 0,
+            preview: option.style,
+            selected: option.selected,
+          }]);
+          return;
+        }
+        
+        // Для остальных опций проверяем unlocked и style
         if (!option.unlocked || !option.style) {
           return;
         }
@@ -278,15 +297,28 @@ const HomePage: React.FC = () => {
 
       return Array.from(groups.entries())
         .map(([key, levels]) => {
-          const theme = themeConfig[key];
+          // Для '__none__' создаём специальный элемент
+          if (key === '__none__') {
+            return {
+              category,
+              key: key as AchievementKey,
+              title: category === 'backgrounds' ? 'Без фона' : 'Без шляпы',
+              description: category === 'backgrounds' ? 'Вернуться к фону по умолчанию' : 'Убрать шляпу',
+              levels: levels,
+              nextLevelCost: undefined,
+              hasMoreLevels: false,
+            } as HomeCustomizationItem;
+          }
+          
+          const theme = themeConfig[key as AchievementKey];
           if (!theme || theme.category !== category) {
             return null;
           }
           const sortedLevels = levels.sort((a, b) => a.level - b.level);
-          const nextLevelInfo = getNextCosmeticLevelCost(homeState, key);
+          const nextLevelInfo = getNextCosmeticLevelCost(homeState, key as AchievementKey);
           return {
             category,
-            key,
+            key: key as AchievementKey,
             title: theme.title,
             description: theme.description,
             levels: sortedLevels,
@@ -303,6 +335,10 @@ const HomePage: React.FC = () => {
     () => buildCustomizationItems('backgrounds', backgroundOptions),
     [buildCustomizationItems, backgroundOptions],
   );
+  const hatItems = useMemo(
+    () => buildCustomizationItems('hats', hatOptions),
+    [buildCustomizationItems, hatOptions],
+  );
 
   const customizationSections: HomeCustomizationSection[] = useMemo(() => {
     const sectionsList: HomeCustomizationSection[] = [];
@@ -313,8 +349,15 @@ const HomePage: React.FC = () => {
         items: backgroundItems,
       });
     }
+    if (hatItems.length > 0) {
+      sectionsList.push({
+        category: 'hats',
+        title: 'Шляпы',
+        items: hatItems,
+      });
+    }
     return sectionsList;
-  }, [backgroundItems]);
+  }, [backgroundItems, hatItems]);
 
   return (
     <div className="home-page" style={homePageStyle}>
@@ -345,6 +388,9 @@ const HomePage: React.FC = () => {
 
       <div className="home-illustration">
         <div className="home-illustration-avatar">
+          {hatStyleDef && hatStyleDef.kind === 'image' && (
+            <img src={hatStyleDef.src} alt="" className="home-illustration-hat" />
+          )}
           <img src={streakImage} alt={streakImageAlt} className="home-illustration-image" />
         </div>
       </div>

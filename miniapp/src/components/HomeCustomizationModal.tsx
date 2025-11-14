@@ -12,7 +12,7 @@ export interface HomeCustomizationItem {
   key: AchievementKey;
   title: string;
   description: string;
-  levels: Array<{ level: number; preview: CosmeticStyle; selected: boolean }>;
+  levels: Array<{ level: number; preview: CosmeticStyle | null; selected: boolean }>;
   nextLevelCost?: number;
   hasMoreLevels: boolean;
 }
@@ -23,8 +23,18 @@ export interface HomeCustomizationSection {
   items: HomeCustomizationItem[];
 }
 
-const getPreviewStyle = (preview: CosmeticStyle): React.CSSProperties =>
-  preview.kind === 'color'
+const getPreviewStyle = (preview: CosmeticStyle | null): React.CSSProperties => {
+  if (!preview) {
+    // Для hats "пусто" - прозрачный фон с рамкой
+    return {
+      backgroundColor: 'transparent',
+      border: '2px dashed #CBD5E1',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    };
+  }
+  return preview.kind === 'color'
     ? {
         backgroundColor: preview.color,
       }
@@ -35,6 +45,7 @@ const getPreviewStyle = (preview: CosmeticStyle): React.CSSProperties =>
         backgroundRepeat: 'no-repeat',
         backgroundColor: '#0f172a',
       };
+};
 
 interface HomeCustomizationModalProps {
   sections: HomeCustomizationSection[];
@@ -141,7 +152,7 @@ const HomeCustomizationModal: React.FC<HomeCustomizationModalProps> = ({
                   <div className="home-modal__achievements-group">
                     {section.items.map((item) => {
                 const firstPreview = item.levels[0]?.preview;
-                const previewStyle = firstPreview
+                const previewStyle = firstPreview !== undefined
                   ? getPreviewStyle(firstPreview)
                   : { backgroundColor: '#E2E8F0' };
                 return (
@@ -173,15 +184,21 @@ const HomeCustomizationModal: React.FC<HomeCustomizationModalProps> = ({
               <div className="home-modal__swatch-group">
                 {activeItem.levels.map((level) => {
                   const swatchStyle = getPreviewStyle(level.preview);
+                  // Определяем ключ для обработки: если key === '__none__', используем его, иначе используем key
+                  const sourceKey = activeItem.key === '__none__' as AchievementKey 
+                    ? '__none__' as AchievementKey 
+                    : activeItem.key;
                   return (
                     <button
                       key={level.level}
                       type="button"
                       className={`home-modal__swatch ${level.selected ? 'home-modal__swatch--active' : ''}`}
                       style={swatchStyle}
-                      onClick={() => handleSelectLevel(activeItem.key, level.level)}
+                      onClick={() => {
+                        handleSelectLevel(sourceKey, level.level);
+                      }}
+                      title={level.level === 0 ? (activeCategory === 'backgrounds' ? 'Без фона' : 'Без шляпы') : undefined}
                     >
-                      <span className="home-modal__swatch-level">{level.level}</span>
                       {level.selected && <span className="home-modal__swatch-check">✓</span>}
                     </button>
                   );

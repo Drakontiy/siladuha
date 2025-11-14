@@ -120,13 +120,16 @@ const cloneCosmeticCategoryState = (
   };
 };
 
-const cloneCosmetics = (cosmetics: HomeState['cosmetics']): HomeState['cosmetics'] => {
-  // Миграция: убираем hats категорию, если она есть в старых данных
-  const oldCosmetics = cosmetics as any;
+const cloneCosmetics = (cosmetics: HomeState['cosmetics'] | any): HomeState['cosmetics'] => {
+  // Миграция: добавляем hats категорию, если её нет в старых данных
+  const oldCosmetics = cosmetics || {};
   
   return {
     backgrounds: oldCosmetics.backgrounds 
       ? cloneCosmeticCategoryState(oldCosmetics.backgrounds)
+      : { byAchievement: {}, activeSelection: null },
+    hats: oldCosmetics.hats 
+      ? cloneCosmeticCategoryState(oldCosmetics.hats)
       : { byAchievement: {}, activeSelection: null },
   };
 };
@@ -150,6 +153,7 @@ const cloneHomeState = (state: HomeState | any): HomeState => {
     },
     cosmetics: oldState.cosmetics ? cloneCosmetics(oldState.cosmetics) : {
       backgrounds: { byAchievement: {}, activeSelection: null },
+      hats: { byAchievement: {}, activeSelection: null },
     },
   };
 };

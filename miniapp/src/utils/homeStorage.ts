@@ -65,7 +65,7 @@ const ACHIEVEMENT_THEME_CONFIG: Record<
   }
 > = {
   workDay: {
-    category: 'backgrounds',
+    category: 'hats',
     levels: getFirstLevelFromFolder('green', ['HatFrog1.svg']),
     baseCost: 100,
     title: 'Рабочий день',
@@ -81,7 +81,7 @@ const ACHIEVEMENT_THEME_CONFIG: Record<
     visible: true,
   },
   planner: {
-    category: 'backgrounds',
+    category: 'hats',
     levels: getFirstLevelFromFolder('blue', ['HatCat1.svg']),
     baseCost: 100,
     title: 'Планровщик',
@@ -89,7 +89,7 @@ const ACHIEVEMENT_THEME_CONFIG: Record<
     visible: true,
   },
   sociality: {
-    category: 'backgrounds',
+    category: 'hats',
     levels: getFirstLevelFromFolder('red', ['HatDefault1.svg', 'HatHeart2.svg', 'HatBerry3.svg']),
     baseCost: 100,
     title: 'Социальность',
@@ -97,15 +97,15 @@ const ACHIEVEMENT_THEME_CONFIG: Record<
     visible: true,
   },
   focus: {
-    category: 'backgrounds',
-    levels: getFirstLevelFromFolder('fire', ['happy1.svg', 'happy2.svg', 'Happy3.svg', 'Happy4.svg', 'Happy5.svg', 'Happy6.svg', 'Happy7.svg']),
+    category: 'hats',
+    levels: getFirstLevelFromFolder('blue', ['HatCat1.svg']),
     baseCost: 100,
     title: 'Фокус',
     description: 'Завершите 30 минут работы',
     visible: true,
   },
   healthySleep: {
-    category: 'backgrounds',
+    category: 'hats',
     levels: getFirstLevelFromFolder('yellow', ['HatSun1.svg', 'HatCacke2.svg']),
     baseCost: 100,
     title: 'Здоровый сон',
@@ -116,7 +116,7 @@ const ACHIEVEMENT_THEME_CONFIG: Record<
 
 const HOME_BACKGROUND_DEFAULT_COLOR = '#F3F4F6';
 const ACHIEVEMENT_KEYS = Object.keys(ACHIEVEMENT_THEME_CONFIG) as AchievementKey[];
-const COSMETIC_CATEGORIES: CosmeticCategory[] = ['backgrounds'];
+const COSMETIC_CATEGORIES: CosmeticCategory[] = ['backgrounds', 'hats'];
 
 const cloneAchievementFlag = (flag: AchievementFlag): AchievementFlag => ({
   unlocked: flag.unlocked,
@@ -179,9 +179,19 @@ const cloneCosmeticCategoryState = (
   };
 };
 
-const cloneCosmetics = (cosmetics: HomeCosmeticsState): HomeCosmeticsState => ({
-  backgrounds: cloneCosmeticCategoryState(cosmetics.backgrounds),
-});
+const cloneCosmetics = (cosmetics: HomeCosmeticsState | any): HomeCosmeticsState => {
+  // Миграция: добавляем hats категорию, если её нет в старых данных
+  const oldCosmetics = cosmetics || {};
+  
+  return {
+    backgrounds: oldCosmetics.backgrounds 
+      ? cloneCosmeticCategoryState(oldCosmetics.backgrounds)
+      : { byAchievement: {}, activeSelection: null },
+    hats: oldCosmetics.hats 
+      ? cloneCosmeticCategoryState(oldCosmetics.hats)
+      : { byAchievement: {}, activeSelection: null },
+  };
+};
 
 const cloneState = (state: HomeState): HomeState => ({
   currentStreak: state.currentStreak,
@@ -192,9 +202,19 @@ const cloneState = (state: HomeState): HomeState => ({
   cosmetics: cloneCosmetics(state.cosmetics),
 });
 
-const getThemeForAchievement = (key: AchievementKey) => ACHIEVEMENT_THEME_CONFIG[key];
+const getThemeForAchievement = (key: AchievementKey) => {
+  // Обработка '__none__' как специального ключа
+  if (key === '__none__' as AchievementKey) {
+    return null;
+  }
+  return ACHIEVEMENT_THEME_CONFIG[key];
+};
 
 const getThemeLevelDefinition = (key: AchievementKey, level: number): ThemeLevelDefinition | null => {
+  // Обработка '__none__' как специального ключа
+  if (key === '__none__' as AchievementKey) {
+    return null;
+  }
   const theme = getThemeForAchievement(key);
   if (!theme) {
     return null;
@@ -210,6 +230,9 @@ const ensureCosmeticProgressForAchievement = (state: HomeState, key: Achievement
     return false;
   }
   const theme = getThemeForAchievement(key);
+  if (!theme) {
+    return false;
+  }
   const categoryState = getCategoryState(state.cosmetics, theme.category);
   const map = categoryState.byAchievement;
   const existing = map[key] ?? { levelsUnlocked: 0, currentLevel: 0 };
@@ -314,6 +337,9 @@ const getProgressForAchievement = (
   key: AchievementKey,
 ): CosmeticThemeProgress | undefined => {
   const theme = getThemeForAchievement(key);
+  if (!theme) {
+    return undefined;
+  }
   const categoryState = getCategoryState(state.cosmetics, theme.category);
   return categoryState.byAchievement[key];
 };
@@ -327,6 +353,9 @@ const getNextCosmeticLevelInfo = (
     return null;
   }
   const theme = getThemeForAchievement(key);
+  if (!theme) {
+    return null;
+  }
   const nextLevel = progress.levelsUnlocked + 1;
   if (nextLevel > theme.levels.length) {
     return null;
@@ -797,9 +826,20 @@ export const getCosmeticOptions = (state: HomeState, category: CosmeticCategory)
   const categoryState = getCategoryState(state.cosmetics, category);
   const active = categoryState.activeSelection;
 
+  // Добавляем опцию "пусто" в начало списка
+  options.push({
+    category,
+    source: '__none__' as AchievementKey,
+    level: 0,
+    unlocked: true,
+    selected: active === null,
+    style: category === 'backgrounds' ? { kind: 'color', color: HOME_BACKGROUND_DEFAULT_COLOR } : null,
+    purchasable: false,
+  });
+
   ACHIEVEMENT_KEYS.forEach((key) => {
     const theme = getThemeForAchievement(key);
-    if (theme.category !== category) {
+    if (!theme || theme.category !== category) {
       return;
     }
     const progress = getProgressForAchievement(state, key);
@@ -840,6 +880,9 @@ export const purchaseCosmeticLevel = (
       return { changed: false, error: 'achievement_locked' };
     }
     const theme = getThemeForAchievement(key);
+    if (!theme) {
+      return { changed: false, error: 'invalid_theme' };
+    }
     const nextInfo = getNextCosmeticLevelInfo(draft, key);
     if (!nextInfo) {
       return { changed: false, error: 'max_level_reached' };
@@ -872,11 +915,18 @@ export const setActiveCosmeticLevel = (
   level: number,
 ): { success: boolean; error?: string; state: HomeState } => {
   const { state, changed, error } = mutateHomeState((draft) => {
+    const categoryState = getCategoryState(draft.cosmetics, category);
+    
+    // Если source === '__none__' или level === 0, устанавливаем null (пустой выбор)
+    if (source === '__none__' as AchievementKey || level === 0) {
+      categoryState.activeSelection = null;
+      return { changed: true };
+    }
+    
     const theme = getThemeForAchievement(source);
     if (!theme || theme.category !== category) {
       return { changed: false, error: 'invalid_level' };
     }
-    const categoryState = getCategoryState(draft.cosmetics, category);
     const progress = categoryState.byAchievement[source];
     if (!progress || level < 1 || level > progress.levelsUnlocked) {
       return { changed: false, error: 'level_locked' };
@@ -908,6 +958,10 @@ export const getCosmeticThemeConfig = () => ACHIEVEMENT_THEME_CONFIG;
 export const getHomeBackgroundOptions = (state: HomeState) =>
   getCosmeticOptions(state, 'backgrounds');
 
+export const getHomeHatStyle = (state: HomeState): CosmeticStyle | null =>
+  getActiveCosmeticStyle(state, 'hats');
+
+export const getHomeHatOptions = (state: HomeState) => getCosmeticOptions(state, 'hats');
 
 export const purchaseHomeBackgroundLevel = purchaseCosmeticLevel;
 

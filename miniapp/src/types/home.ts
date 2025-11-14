@@ -28,7 +28,7 @@ export interface CosmeticThemeProgress {
   currentLevel: number;
 }
 
-export type CosmeticCategory = 'backgrounds';
+export type CosmeticCategory = 'backgrounds' | 'hats';
 
 export interface CosmeticCategoryState {
   byAchievement: Partial<Record<AchievementKey, CosmeticThemeProgress>>;
@@ -37,6 +37,7 @@ export interface CosmeticCategoryState {
 
 export interface HomeCosmeticsState {
   backgrounds: CosmeticCategoryState;
+  hats: CosmeticCategoryState;
 }
 
 export interface HomeState {
@@ -63,6 +64,10 @@ export const DEFAULT_HOME_STATE: HomeState = {
   },
   cosmetics: {
     backgrounds: {
+      byAchievement: {},
+      activeSelection: null,
+    },
+    hats: {
       byAchievement: {},
       activeSelection: null,
     },
