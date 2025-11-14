@@ -63,6 +63,8 @@ const StatsPage: React.FC = () => {
   const [friendSharedCache, setFriendSharedCache] = useState<Record<string, SharedUserData>>({});
   const [isLoadingShared, setIsLoadingShared] = useState(false);
   const [sharedError, setSharedError] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
+  const [userNameLoading, setUserNameLoading] = useState(false);
 
   useEffect(() => {
     const unsubscribe = subscribeToUserStateChanges(() => {
@@ -272,6 +274,74 @@ const StatsPage: React.FC = () => {
     return { entries, dayCount, totalMinutes };
   }, [currentActivityState, periodRange]);
 
+  // Получаем имя и фамилию из URL параметров MAX или из activeUser
+  const getUserNameFromMax = () => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const firstName = params.get('first_name') || '';
+      const lastName = params.get('last_name') || '';
+      
+      // Если есть отдельные имя и фамилия
+      if (firstName || lastName) {
+        const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+        return {
+          firstName,
+          lastName,
+          fullName: fullName || null,
+        };
+      }
+      
+      // Если есть полное имя в user_name
+      const fullNameParam = params.get('user_name');
+      if (fullNameParam) {
+        const parts = fullNameParam.trim().split(/\s+/);
+        return {
+          firstName: parts[0] || '',
+          lastName: parts.slice(1).join(' ') || '',
+          fullName: fullNameParam.trim() || null,
+        };
+      }
+    } catch {
+      // Игнорируем ошибки
+    }
+    
+    return {
+      firstName: '',
+      lastName: '',
+      fullName: null,
+    };
+  };
+
+  // Загружаем имя пользователя из API, если оно не доступно в URL или activeUser
+  useEffect(() => {
+    const { fullName } = getUserNameFromMax();
+    if (activeUser.userId && activeUser.userId !== DEFAULT_USER_ID && !fullName && !activeUser.name && !userName && !userNameLoading) {
+      setUserNameLoading(true);
+      const apiBase = process.env.MINIAPP_API_BASE || window.location.origin;
+      fetch(`${apiBase}/api/user/${activeUser.userId}/name`)
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error('Failed to fetch user name');
+          }
+          return response.json() as Promise<{ userId: string; name: string | null }>;
+        })
+        .then((data) => {
+          if (data.name) {
+            setUserName(data.name);
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to fetch user name:', error);
+        })
+        .finally(() => {
+          setUserNameLoading(false);
+        });
+    }
+  }, [activeUser.userId, activeUser.name, userName, userNameLoading]);
+
+  const { firstName, lastName, fullName } = getUserNameFromMax();
+  const displayUserName = fullName || userName || activeUser.name || activeUser.username || 'Я';
+
   const availableFriends: Friend[] = useMemo(
     () =>
       socialState.friends
@@ -320,7 +390,9 @@ const StatsPage: React.FC = () => {
           value={selectedUserId}
           onChange={handleSelectedUserChange}
         >
-          <option value={activeUserId}>{(activeUser.name ?? activeUser.username ?? 'Я') + ' (вы)'}</option>
+          <option value={activeUserId}>
+            {userNameLoading && !displayUserName ? 'Загрузка...' : displayUserName + ' (вы)'}
+          </option>
           {availableFriends.map((friend) => (
             <option key={friend.userId} value={friend.userId} disabled={!friend.shareTheirStatsWithMe}>
               {friend.displayName || friend.userId}
