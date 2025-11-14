@@ -60,7 +60,7 @@
 
 .stats-summary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 12px;
   flex-shrink: 0;
 }
@@ -111,6 +111,8 @@
   justify-content: center;
   flex-shrink: 0;
   overflow: hidden;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .stats-empty {

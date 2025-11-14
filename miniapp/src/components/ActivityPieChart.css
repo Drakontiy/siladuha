@@ -4,11 +4,16 @@
   align-items: center;
   gap: 16px;
   width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .activity-pie-chart__svg {
   width: 220px;
   height: 220px;
+  max-width: 100%;
+  overflow: visible;
 }
 
 .activity-pie-chart__segment {
@@ -22,17 +27,17 @@
 }
 
 .activity-pie-chart__total {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   fill: #0f172a;
 }
 
 .activity-pie-chart__days {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
   fill: #64748b;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.4px;
 }
 
 .activity-pie-chart__label {
@@ -42,9 +47,11 @@
 
 .activity-pie-chart__legend {
   width: 100%;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overflow: hidden;
 }
 
 .activity-pie-chart__legend-item {

@@ -136,14 +136,25 @@ const ActivityPieChart: React.FC<ActivityPieChartProps> = ({ data, dayCount }) =
 
         <circle cx="90" cy="90" r="32" fill="#ffffff" />
 
-        <text x="90" y="74" textAnchor="middle" className="activity-pie-chart__days">
+        <text 
+          x="90" 
+          y="78" 
+          textAnchor="middle" 
+          className="activity-pie-chart__days"
+          textLength="50"
+          lengthAdjust="spacingAndGlyphs"
+        >
           {formatDaysLabel(dayCount)}
         </text>
-        <text x="90" y="92" textAnchor="middle" className="activity-pie-chart__total">
+        <text 
+          x="90" 
+          y="102" 
+          textAnchor="middle" 
+          className="activity-pie-chart__total"
+          textLength="45"
+          lengthAdjust="spacingAndGlyphs"
+        >
           {formatHours(total)}
-        </text>
-        <text x="90" y="106" textAnchor="middle" className="activity-pie-chart__label">
-          за период
         </text>
       </svg>
 
