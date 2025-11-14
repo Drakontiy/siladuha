@@ -89,11 +89,31 @@ const cloneStoredAchievementFlag = (flag: StoredAchievementFlag): StoredAchievem
   unlockedAt: flag.unlockedAt,
 });
 
-const cloneStoredAchievements = (achievements: StoredAchievementsState): StoredAchievementsState => ({
-  firstGoalCompleted: cloneStoredAchievementFlag(achievements.firstGoalCompleted),
-  focusEightHours: cloneStoredAchievementFlag(achievements.focusEightHours),
-  sleepSevenNights: cloneStoredAchievementFlag(achievements.sleepSevenNights),
-});
+const cloneStoredAchievements = (achievements: StoredAchievementsState | any): StoredAchievementsState => {
+  // Миграция: преобразуем старые ключи в новые и добавляем недостающие
+  const old = achievements || {};
+  
+  return {
+    workDay: cloneStoredAchievementFlag(
+      old.workDay || old.focusEightHours || { unlocked: false, unlockedAt: null }
+    ),
+    firstGoalCompleted: cloneStoredAchievementFlag(
+      old.firstGoalCompleted || { unlocked: false, unlockedAt: null }
+    ),
+    planner: cloneStoredAchievementFlag(
+      old.planner || { unlocked: false, unlockedAt: null }
+    ),
+    sociality: cloneStoredAchievementFlag(
+      old.sociality || { unlocked: false, unlockedAt: null }
+    ),
+    focus: cloneStoredAchievementFlag(
+      old.focus || { unlocked: false, unlockedAt: null }
+    ),
+    healthySleep: cloneStoredAchievementFlag(
+      old.healthySleep || old.sleepSevenNights || { unlocked: false, unlockedAt: null }
+    ),
+  };
+};
 
 const cloneStoredGoals = (goals: Record<string, StoredDailyGoalState>): Record<string, StoredDailyGoalState> => {
   const result: Record<string, StoredDailyGoalState> = {};
@@ -154,14 +174,18 @@ const cloneStoredCosmetics = (cosmetics: StoredHomeCosmeticsState | undefined): 
   };
 };
 
-const cloneStoredHomeState = (state: StoredHomeState): StoredHomeState => ({
-  currentStreak: state.currentStreak,
-  lastProcessedDate: state.lastProcessedDate,
-  currency: state.currency,
-  goals: cloneStoredGoals(state.goals),
-  achievements: cloneStoredAchievements(state.achievements),
-  cosmetics: cloneStoredCosmetics(state.cosmetics),
-});
+const cloneStoredHomeState = (state: StoredHomeState | any): StoredHomeState => {
+  // Безопасное клонирование с миграцией
+  const oldState = state || {};
+  return {
+    currentStreak: typeof oldState.currentStreak === 'number' ? oldState.currentStreak : 0,
+    lastProcessedDate: typeof oldState.lastProcessedDate === 'string' ? oldState.lastProcessedDate : null,
+    currency: typeof oldState.currency === 'number' ? oldState.currency : 0,
+    goals: cloneStoredGoals(oldState.goals || {}),
+    achievements: cloneStoredAchievements(oldState.achievements),
+    cosmetics: cloneStoredCosmetics(oldState.cosmetics),
+  };
+};
 
 const cloneDefaultHomeState = () => cloneStoredHomeState(DEFAULT_USER_STATE.homeState);
 

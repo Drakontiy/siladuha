@@ -38,9 +38,12 @@ export interface StoredAchievementFlag {
 }
 
 export interface StoredAchievementsState {
+  workDay: StoredAchievementFlag;
   firstGoalCompleted: StoredAchievementFlag;
-  focusEightHours: StoredAchievementFlag;
-  sleepSevenNights: StoredAchievementFlag;
+  planner: StoredAchievementFlag;
+  sociality: StoredAchievementFlag;
+  focus: StoredAchievementFlag;
+  healthySleep: StoredAchievementFlag;
 }
 
 export interface StoredCosmeticThemeProgress {
@@ -120,9 +123,12 @@ export const DEFAULT_HOME_STATE: StoredHomeState = {
   currency: 0,
   goals: {},
   achievements: {
+    workDay: { unlocked: false, unlockedAt: null },
     firstGoalCompleted: { unlocked: false, unlockedAt: null },
-    focusEightHours: { unlocked: false, unlockedAt: null },
-    sleepSevenNights: { unlocked: false, unlockedAt: null },
+    planner: { unlocked: false, unlockedAt: null },
+    sociality: { unlocked: false, unlockedAt: null },
+    focus: { unlocked: false, unlockedAt: null },
+    healthySleep: { unlocked: false, unlockedAt: null },
   },
   cosmetics: {
     backgrounds: {
@@ -336,12 +342,32 @@ const sanitizeHomeState = (input: unknown): StoredHomeState => {
     currency: typeof source.currency === 'number' ? source.currency : 0,
     goals,
     achievements: {
-      firstGoalCompleted: sanitizeAchievement(
-        (achievementsSource as StoredAchievementsState).firstGoalCompleted,
+      // Миграция: преобразуем старые ключи в новые
+      workDay: sanitizeAchievement(
+        (achievementsSource as StoredAchievementsState & { workDay?: unknown; focusEightHours?: unknown }).workDay ||
+        (achievementsSource as StoredAchievementsState & { focusEightHours?: unknown }).focusEightHours ||
+        DEFAULT_HOME_STATE.achievements.workDay,
       ),
-      focusEightHours: sanitizeAchievement((achievementsSource as StoredAchievementsState).focusEightHours),
-      sleepSevenNights: sanitizeAchievement(
-        (achievementsSource as StoredAchievementsState).sleepSevenNights,
+      firstGoalCompleted: sanitizeAchievement(
+        (achievementsSource as StoredAchievementsState).firstGoalCompleted ||
+        DEFAULT_HOME_STATE.achievements.firstGoalCompleted,
+      ),
+      planner: sanitizeAchievement(
+        (achievementsSource as StoredAchievementsState).planner ||
+        DEFAULT_HOME_STATE.achievements.planner,
+      ),
+      sociality: sanitizeAchievement(
+        (achievementsSource as StoredAchievementsState).sociality ||
+        DEFAULT_HOME_STATE.achievements.sociality,
+      ),
+      focus: sanitizeAchievement(
+        (achievementsSource as StoredAchievementsState).focus ||
+        DEFAULT_HOME_STATE.achievements.focus,
+      ),
+      healthySleep: sanitizeAchievement(
+        (achievementsSource as StoredAchievementsState & { healthySleep?: unknown; sleepSevenNights?: unknown }).healthySleep ||
+        (achievementsSource as StoredAchievementsState & { sleepSevenNights?: unknown }).sleepSevenNights ||
+        DEFAULT_HOME_STATE.achievements.healthySleep,
       ),
     },
     cosmetics: sanitizeHomeCosmeticsState(source.cosmetics),
