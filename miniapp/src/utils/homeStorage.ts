@@ -17,13 +17,26 @@ import { getHomeState as getSyncedHomeState, setHomeState as setSyncedHomeState 
 const DAY_TOTAL_MINUTES = 24 * 60;
 const VIRTUAL_START_ID = '__start_of_day__';
 const VIRTUAL_END_ID = '__end_of_day__';
-const GOAL_REWARD_AMOUNT = 100;
 const EIGHT_HOUR_MINUTES = 8 * 60;
 const PRODUCTIVE_ACHIEVEMENT_LOOKBACK_DAYS = 30;
 const SLEEP_ACHIEVEMENT_LOOKBACK_DAYS = 7;
 const SLEEP_WEEK_MINUTES = 56 * 60;
 
-export const GOAL_REWARD = GOAL_REWARD_AMOUNT;
+// Начисление газа за продуктивную работу: 10 газа за час
+const PRODUCTIVE_HOUR_REWARD = 10;
+
+// Начисление газа за выполнение целей:
+// 1 день в ударе = 100 газа
+// 2 дня в ударе = 200 газа
+// 3+ дней в ударе = 300 газа
+const getGoalReward = (streak: number): number => {
+  if (streak === 1) return 100;
+  if (streak === 2) return 200;
+  if (streak >= 3) return 300;
+  return 0;
+};
+
+export const GOAL_REWARD = 100; // Для совместимости, но не используется напрямую
 
 export type ThemeLevelDefinition =
   | { kind: 'color'; value: string }
@@ -509,22 +522,9 @@ export const processPendingDays = (
     const previousRewardedHours = existingGoal?.productiveRewardedHours ?? 0;
 
     const productiveHours = Math.floor(productiveMinutes / 60);
-
-    if (productiveHours > previousRewardedHours) {
-      const delta = productiveHours - previousRewardedHours;
-      nextState.currency += delta * 10;
-      currencyChanged = true;
-    } else if (productiveHours < previousRewardedHours) {
-      const delta = previousRewardedHours - productiveHours;
-      const deduction = delta * 10;
-      if (deduction > 0) {
-        const adjustedCurrency = Math.max(0, nextState.currency - deduction);
-        if (adjustedCurrency !== nextState.currency) {
-          nextState.currency = adjustedCurrency;
-          currencyChanged = true;
-        }
-      }
-    }
+    
+    // Обновляем productiveRewardedHours, но не начисляем газ здесь
+    // Газ начисляется в реальном времени при изменении интервалов
 
     let rewardGranted = previousRewardGranted;
     let countedInStreak = previousCountedInStreak;
@@ -535,7 +535,7 @@ export const processPendingDays = (
           countedInStreak = true;
         }
         if (!rewardGranted) {
-          const streakReward = Math.min(currentStreak, 7) * GOAL_REWARD;
+          const streakReward = getGoalReward(currentStreak);
           nextState.currency += streakReward;
           rewardGranted = true;
           currencyChanged = true;
@@ -546,6 +546,8 @@ export const processPendingDays = (
       }
     }
 
+    // Обновляем productiveRewardedHours, но не начисляем газ здесь
+    // Газ начисляется в реальном времени при изменении интервалов
     nextState.goals[key] = {
       targetMinutes,
       completed,
@@ -593,22 +595,8 @@ export const updateTodayGoal = (
   let currencyChanged = false;
   let currentStreak = nextState.currentStreak;
 
-  // Обновление валюты за продуктивные часы
-  if (productiveHours > previousRewardedHours) {
-    const delta = productiveHours - previousRewardedHours;
-    nextState.currency += delta * 10;
-    currencyChanged = true;
-  } else if (productiveHours < previousRewardedHours) {
-    const delta = previousRewardedHours - productiveHours;
-    const deduction = delta * 10;
-    if (deduction > 0) {
-      const adjustedCurrency = Math.max(0, nextState.currency - deduction);
-      if (adjustedCurrency !== nextState.currency) {
-        nextState.currency = adjustedCurrency;
-        currencyChanged = true;
-      }
-    }
-  }
+  // Обновляем productiveRewardedHours, но не начисляем газ здесь
+  // Газ начисляется в реальном времени при изменении интервалов
 
   // Обновление streak
   let rewardGranted = previousRewardGranted;
@@ -621,7 +609,7 @@ export const updateTodayGoal = (
       changed = true;
     }
     if (!rewardGranted) {
-      const streakReward = Math.min(currentStreak, 7) * GOAL_REWARD;
+      const streakReward = getGoalReward(currentStreak);
       nextState.currency += streakReward;
       rewardGranted = true;
       currencyChanged = true;
@@ -834,6 +822,72 @@ export const setActiveHomeBackground = (source: AchievementKey, level: number) =
 export const getNextHomeBackgroundLevelCost = getNextCosmeticLevelCost;
 
 export const getHomeBackgroundThemesConfig = () => ACHIEVEMENT_THEME_CONFIG;
+
+/**
+ * Обновляет газ при изменении продуктивных интервалов в реальном времени
+ * Вызывается при добавлении, изменении или удалении продуктивных интервалов
+ */
+export const updateCurrencyForProductiveIntervals = (
+  date: Date,
+  previousProductiveMinutes: number | null = null
+): void => {
+  const state = loadHomeState();
+  const dateKey = getDateKey(date);
+  const goal = state.goals[dateKey];
+  
+  // Текущее количество продуктивных минут
+  const currentProductiveMinutes = calculateProductiveMinutes(date);
+  const currentProductiveHours = Math.floor(currentProductiveMinutes / 60);
+  
+  // Предыдущее количество продуктивных часов из цели
+  const previousProductiveHours = goal?.productiveRewardedHours ?? 0;
+  
+  // Если previousProductiveMinutes передан, используем его
+  const previousHours = previousProductiveMinutes !== null
+    ? Math.floor(previousProductiveMinutes / 60)
+    : previousProductiveHours;
+  
+  // Вычисляем разницу
+  const hoursDelta = currentProductiveHours - previousHours;
+  
+  if (hoursDelta === 0) {
+    // Обновляем только productiveRewardedHours без изменения газа
+    if (goal && goal.productiveRewardedHours !== currentProductiveHours) {
+      const nextState = cloneState(state);
+      nextState.goals[dateKey] = {
+        ...goal,
+        productiveRewardedHours: currentProductiveHours,
+      };
+      saveHomeState(nextState);
+    }
+    return; // Ничего не изменилось в часах
+  }
+  
+  const nextState = cloneState(state);
+  
+  if (hoursDelta > 0) {
+    // Добавляем газ
+    nextState.currency += hoursDelta * PRODUCTIVE_HOUR_REWARD;
+  } else {
+    // Убираем газ (но не уводим в минус)
+    const deduction = Math.abs(hoursDelta) * PRODUCTIVE_HOUR_REWARD;
+    nextState.currency = Math.max(0, nextState.currency - deduction);
+  }
+  
+  // Обновляем productiveRewardedHours в цели
+  if (!nextState.goals[dateKey]) {
+    // Если цели нет, просто обновляем currency без создания цели
+    saveHomeState(nextState);
+    return;
+  }
+  
+  nextState.goals[dateKey] = {
+    ...nextState.goals[dateKey]!,
+    productiveRewardedHours: currentProductiveHours,
+  };
+  
+  saveHomeState(nextState);
+};
 
 
 
