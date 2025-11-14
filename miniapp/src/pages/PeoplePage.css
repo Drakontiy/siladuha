@@ -5,6 +5,28 @@
   padding: 24px 20px 32px;
 }
 
+.people-name {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 16px 20px;
+  margin: -24px -20px 0;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.people-name__first {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1d1d1d;
+}
+
+.people-name__last {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1d1d1d;
+}
+
 .people-header {
   display: flex;
   flex-direction: column;
@@ -27,6 +49,12 @@
   gap: 4px;
 }
 
+.people-id__wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .people-id__caption {
   font-size: 12px;
   font-weight: 600;
@@ -40,6 +68,7 @@
   font-weight: 600;
   color: #1d1d1d;
   word-break: break-all;
+  flex: 1;
 }
 
 .people-button {
@@ -83,6 +112,11 @@
 
 .people-button--danger:hover:not(:disabled) {
   background-color: #b91c1c;
+}
+
+.people-button--copy {
+  flex-shrink: 0;
+  margin: 0;
 }
 
 .people-section {

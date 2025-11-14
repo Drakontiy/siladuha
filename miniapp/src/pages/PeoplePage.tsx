@@ -38,6 +38,49 @@ const sortByDateDesc = <T extends { createdAt: string }>(items: T[]): T[] =>
 const PeoplePage: React.FC = () => {
   const activeUser = getActiveUser();
   const socialState = useSocialState();
+  
+  // Получаем имя и фамилию из Telegram WebApp, если доступны
+  const getUserName = () => {
+    try {
+      const telegram = (window as unknown as { 
+        Telegram?: { 
+          WebApp?: { 
+            initDataUnsafe?: { 
+              user?: { 
+                first_name?: string; 
+                last_name?: string;
+              } 
+            } 
+          } 
+        } 
+      }).Telegram;
+      const user = telegram?.WebApp?.initDataUnsafe?.user;
+      if (user) {
+        return {
+          firstName: user.first_name ?? '',
+          lastName: user.last_name ?? '',
+        };
+      }
+    } catch {
+      // Игнорируем ошибки
+    }
+    
+    // Если Telegram WebApp недоступен, пытаемся разделить name по пробелу
+    if (activeUser.name) {
+      const parts = activeUser.name.trim().split(/\s+/);
+      return {
+        firstName: parts[0] || '',
+        lastName: parts.slice(1).join(' ') || '',
+      };
+    }
+    
+    return {
+      firstName: '',
+      lastName: '',
+    };
+  };
+  
+  const { firstName, lastName } = getUserName();
 
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -484,15 +527,23 @@ const PeoplePage: React.FC = () => {
 
   return (
     <div className="people-page">
+      {(firstName || lastName) && (
+        <div className="people-name">
+          {firstName && <span className="people-name__first">{firstName}</span>}
+          {lastName && <span className="people-name__last">{lastName}</span>}
+        </div>
+      )}
       <header className="people-header">
         <div className="people-id">
           <div className="people-id__caption">Ваш ID</div>
-          <div className="people-id__value">{activeUser.userId ?? '—'}</div>
+          <div className="people-id__wrapper">
+            <div className="people-id__value">{activeUser.userId ?? '—'}</div>
+            <button className="people-button people-button--copy" onClick={handleCopyId}>
+              Скопировать
+            </button>
+          </div>
         </div>
         <div className="people-header__actions">
-          <button className="people-button" onClick={handleCopyId}>
-            Скопировать
-          </button>
           <button
             className="people-button people-button--primary"
             onClick={handleAddFriend}

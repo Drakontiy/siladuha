@@ -60,7 +60,7 @@ body {
   flex: 1;
   padding-bottom: 80px; /* Место для навигации */
   overflow: hidden;
-  height: calc(100vh - 80px);
+  min-height: calc(100vh - 80px);
 }
 
 /* Утилиты для центрирования */
