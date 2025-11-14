@@ -40,13 +40,16 @@ const ACHIEVEMENT_THEME_CONFIG: Record<
   }
 > = {
   firstGoalCompleted: {
-    category: 'hats',
+    category: 'backgrounds',
     levels: [
-      { kind: 'image', value: 'media/hat.svg' },
+      { kind: 'image', value: 'media/forest0.svg' },
+      { kind: 'image', value: 'media/forest1.svg' },
+      { kind: 'image', value: 'media/forest2.svg' },
+      { kind: 'image', value: 'media/forest3.svg' },
     ],
-    baseCost: 150,
+    baseCost: 100,
     title: 'Первый шаг',
-    description: 'Элегантная шляпа за первую выполненную цель.',
+    description: 'Лесные фоны за первую выполненную цель.',
   },
   focusEightHours: {
     category: 'backgrounds',
@@ -288,9 +291,18 @@ const getNextCosmeticLevelInfo = (
     return null;
   }
   const definition = theme.levels[nextLevel - 1];
+  
+  // Специальная логика для firstGoalCompleted: forest0 бесплатен, остальные стоят 100, 200, 300
+  let cost: number;
+  if (key === 'firstGoalCompleted') {
+    cost = theme.baseCost * (nextLevel - 1);
+  } else {
+    cost = theme.baseCost * nextLevel;
+  }
+  
   return {
     level: nextLevel,
-    cost: theme.baseCost * nextLevel,
+    cost,
     definition,
   };
 };
