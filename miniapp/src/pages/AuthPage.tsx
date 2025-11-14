@@ -9,33 +9,51 @@ const AuthPage: React.FC<AuthPageProps> = ({ onCodeGenerated }) => {
   const [code, setCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [codeGenerated, setCodeGenerated] = useState(false);
 
   useEffect(() => {
-    const generateCode = async () => {
-      try {
-        const apiBase = process.env.MINIAPP_API_BASE || window.location.origin;
-        const response = await fetch(`${apiBase}/api/auth/generate-code`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
+    // Проверяем, есть ли уже код в localStorage
+    const savedCodes = localStorage.getItem('max_auth_codes');
+    let codes: string[] = savedCodes ? JSON.parse(savedCodes) : [];
+    
+    // Если уже есть валидный код, используем его
+    if (codes.length > 0 && !codeGenerated) {
+      const existingCode = codes[0];
+      setCode(existingCode);
+      setCodeGenerated(true);
+      onCodeGenerated(existingCode);
+      return;
+    }
+    
+    // Генерируем код только один раз, если его еще нет
+    if (!code && !codeGenerated) {
+      const generateCode = async () => {
+        try {
+          const apiBase = process.env.MINIAPP_API_BASE || window.location.origin;
+          const response = await fetch(`${apiBase}/api/auth/generate-code`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
 
-        if (!response.ok) {
-          throw new Error('Не удалось сгенерировать код');
+          if (!response.ok) {
+            throw new Error('Не удалось сгенерировать код');
+          }
+
+          const data = await response.json();
+          setCode(data.code);
+          setCodeGenerated(true);
+          onCodeGenerated(data.code);
+        } catch (err) {
+          setError('Ошибка при генерации кода. Попробуйте обновить страницу.');
+          console.error('Failed to generate code:', err);
         }
+      };
 
-        const data = await response.json();
-        setCode(data.code);
-        onCodeGenerated(data.code);
-      } catch (err) {
-        setError('Ошибка при генерации кода. Попробуйте обновить страницу.');
-        console.error('Failed to generate code:', err);
-      }
-    };
-
-    generateCode();
-  }, [onCodeGenerated]);
+      generateCode();
+    }
+  }, [onCodeGenerated, code, codeGenerated]);
 
   const handleCopy = async () => {
     if (!code) {

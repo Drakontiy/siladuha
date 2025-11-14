@@ -23,9 +23,11 @@ const App: React.FC = () => {
       const user = getActiveUser();
       let isAuth = user.userId !== DEFAULT_USER_ID && user.userId !== 'local';
       
-      // Если уже авторизован, обновляем состояние
+      // Если уже авторизован, обновляем состояние и останавливаем проверку
       if (isAuth) {
         setIsAuthenticated(true);
+        // Очищаем все старые коды после успешной авторизации
+        localStorage.removeItem('max_auth_codes');
         return;
       }
       
@@ -34,7 +36,7 @@ const App: React.FC = () => {
       const savedCodes = localStorage.getItem('max_auth_codes');
       let codes: string[] = savedCodes ? JSON.parse(savedCodes) : [];
       
-      // Добавляем текущий код, если он есть
+      // Добавляем текущий код, если он есть и его еще нет в списке
       if (authCode && !codes.includes(authCode)) {
         codes.push(authCode);
         localStorage.setItem('max_auth_codes', JSON.stringify(codes));
@@ -104,6 +106,9 @@ const App: React.FC = () => {
       if (boundUserId) {
         console.log(`🎉 Found bound userId: ${boundUserId}, applying...`);
         try {
+          // Очищаем все коды перед сохранением user_id
+          localStorage.removeItem('max_auth_codes');
+          
           // Сохраняем user_id в localStorage
           localStorage.setItem('max_last_user_id', boundUserId);
           console.log(`💾 Saved userId to localStorage: ${boundUserId}`);
@@ -137,9 +142,20 @@ const App: React.FC = () => {
 
     checkAuth();
     
-    // Проверяем каждые 1 секунду, если не авторизован
-    // Увеличиваем частоту проверки для более быстрого обнаружения привязки
+    // Проверяем каждые 1 секунду только если не авторизован
+    // Останавливаем проверку, если пользователь авторизован
     const intervalId = setInterval(() => {
+      const user = getActiveUser();
+      const isAuth = user.userId !== DEFAULT_USER_ID && user.userId !== 'local';
+      
+      // Если авторизован, останавливаем проверку
+      if (isAuth) {
+        setIsAuthenticated(true);
+        localStorage.removeItem('max_auth_codes');
+        clearInterval(intervalId);
+        return;
+      }
+      
       checkAuth();
     }, 1000);
     
