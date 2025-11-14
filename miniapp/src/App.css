@@ -58,9 +58,9 @@ body {
 
 .app-content {
   flex: 1;
-  padding-bottom: 80px; /* Место для навигации */
-  overflow: hidden;
-  min-height: calc(100vh - 80px);
+  overflow: visible;
+  position: relative;
+  min-height: 100vh;
 }
 
 /* Утилиты для центрирования */
