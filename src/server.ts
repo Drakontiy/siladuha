@@ -249,6 +249,7 @@ app.post(`${API_BASE_PATH}/auth/generate-code`, (_req, res) => {
       code,
       expiresAt,
       userId: null,
+      userName: null,
     });
 
     res.setHeader('Cache-Control', 'no-store');
