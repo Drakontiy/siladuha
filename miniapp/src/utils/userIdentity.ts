@@ -49,22 +49,42 @@ const parseUserFromQuery = (): MiniAppUser | null => {
   }
 };
 
-const parseUserFromTelegram = (): MiniAppUser | null => {
+/**
+ * Парсит данные пользователя из URL параметров
+ * В MAX мини-приложении данные передаются через URL параметры:
+ * - user_id - ID пользователя
+ * - user_name - полное имя пользователя (first_name + last_name)
+ * - first_name - имя (если передаётся отдельно)
+ * - last_name - фамилия (если передаётся отдельно)
+ * - username - username пользователя
+ */
+const parseUserFromMaxUrl = (): MiniAppUser | null => {
   try {
-    const telegram = (window as unknown as { Telegram?: { WebApp?: { initDataUnsafe?: { user?: { id?: number; first_name?: string; last_name?: string; username?: string } } } } }).Telegram;
-    const user = telegram?.WebApp?.initDataUnsafe?.user;
-    if (!user?.id) {
+    const params = new URLSearchParams(window.location.search);
+    const userId = params.get('user_id');
+    
+    if (!userId) {
       return null;
     }
 
-    const firstName = user.first_name ?? '';
-    const lastName = user.last_name ?? '';
-    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+    // Пробуем получить имя и фамилию отдельно или полное имя
+    const firstName = params.get('first_name');
+    const lastName = params.get('last_name');
+    const fullName = params.get('user_name');
+    const username = params.get('username');
+
+    // Составляем полное имя из отдельных частей или используем переданное
+    let name: string | undefined;
+    if (firstName || lastName) {
+      name = [firstName, lastName].filter(Boolean).join(' ').trim() || undefined;
+    } else if (fullName) {
+      name = fullName.trim() || undefined;
+    }
 
     return {
-      userId: String(user.id),
-      name: fullName || undefined,
-      username: user.username ?? null,
+      userId,
+      name,
+      username: username || null,
     };
   } catch {
     return null;
@@ -87,15 +107,17 @@ const loadLastKnownUser = (): MiniAppUser | null => {
 
 export const initializeUserIdentity = (): MiniAppUser => {
   const fromQuery = parseUserFromQuery();
-  const fromTelegram = parseUserFromTelegram();
+  const fromMaxUrl = parseUserFromMaxUrl();
   const lastKnown = loadLastKnownUser();
 
-  // Приоритет: query параметры > Telegram WebApp > сохранённый в localStorage
-  activeUser = fromQuery ?? fromTelegram ?? lastKnown ?? { userId: DEFAULT_USER_ID };
+  // Приоритет: данные из URL параметров MAX > сохранённый в localStorage
+  // parseUserFromQuery и parseUserFromMaxUrl могут возвращать одинаковые данные,
+  // но parseUserFromMaxUrl поддерживает first_name и last_name отдельно
+  activeUser = fromMaxUrl ?? fromQuery ?? lastKnown ?? { userId: DEFAULT_USER_ID };
 
-  // Если есть данные из Telegram WebApp, обновляем имя даже если user_id из другого источника
-  if (fromTelegram && fromTelegram.name) {
-    activeUser.name = fromTelegram.name;
+  // Если есть данные из URL параметров MAX, обновляем имя даже если user_id из другого источника
+  if (fromMaxUrl && fromMaxUrl.name && fromMaxUrl.name !== activeUser.name) {
+    activeUser.name = fromMaxUrl.name;
   }
 
   // Сохраняем только если это не DEFAULT_USER_ID

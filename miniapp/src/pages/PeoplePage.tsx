@@ -39,29 +39,31 @@ const PeoplePage: React.FC = () => {
   const activeUser = getActiveUser();
   const socialState = useSocialState();
   
-  // Получаем имя и фамилию из Telegram WebApp, если доступны
-  const getUserNameFromTelegram = () => {
+  // Получаем имя и фамилию из URL параметров MAX или из activeUser
+  const getUserNameFromMax = () => {
     try {
-      const telegram = (window as unknown as { 
-        Telegram?: { 
-          WebApp?: { 
-            initDataUnsafe?: { 
-              user?: { 
-                first_name?: string; 
-                last_name?: string;
-              } 
-            } 
-          } 
-        } 
-      }).Telegram;
-      const user = telegram?.WebApp?.initDataUnsafe?.user;
-      if (user) {
-        const firstName = user.first_name ?? '';
-        const lastName = user.last_name ?? '';
+      const params = new URLSearchParams(window.location.search);
+      const firstName = params.get('first_name') || '';
+      const lastName = params.get('last_name') || '';
+      
+      // Если есть отдельные имя и фамилия
+      if (firstName || lastName) {
+        const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
         return {
           firstName,
           lastName,
-          fullName: [firstName, lastName].filter(Boolean).join(' ').trim() || null,
+          fullName: fullName || null,
+        };
+      }
+      
+      // Если есть полное имя в user_name
+      const fullNameParam = params.get('user_name');
+      if (fullNameParam) {
+        const parts = fullNameParam.trim().split(/\s+/);
+        return {
+          firstName: parts[0] || '',
+          lastName: parts.slice(1).join(' ') || '',
+          fullName: fullNameParam.trim() || null,
         };
       }
     } catch {
@@ -75,9 +77,9 @@ const PeoplePage: React.FC = () => {
     };
   };
   
-  const { firstName, lastName, fullName } = getUserNameFromTelegram();
+  const { firstName, lastName, fullName } = getUserNameFromMax();
   
-  // Если Telegram WebApp недоступен, используем name из activeUser
+  // Если данные из URL недоступны, используем name из activeUser
   const displayFirstName = firstName || (activeUser.name ? activeUser.name.trim().split(/\s+/)[0] : '');
   const displayLastName = lastName || (activeUser.name ? activeUser.name.trim().split(/\s+/).slice(1).join(' ') : '');
 
@@ -314,7 +316,7 @@ const PeoplePage: React.FC = () => {
     setError(null);
 
     try {
-      // Передаём имя из Telegram WebApp или из activeUser
+      // Передаём имя из URL параметров MAX или из activeUser
       const requesterName = fullName || activeUser.name || activeUser.username || null;
       const updatedSocial = await sendFriendRequest(
         trimmed,
@@ -340,7 +342,7 @@ const PeoplePage: React.FC = () => {
     setError(null);
 
     try {
-      // Передаём имя из Telegram WebApp или из activeUser
+      // Передаём имя из URL параметров MAX или из activeUser
       const responderName = fullName || activeUser.name || activeUser.username || null;
       const updatedSocial = await respondToFriendRequest(
         request.id,

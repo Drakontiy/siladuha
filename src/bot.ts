@@ -88,8 +88,17 @@ const buildMiniAppUrlForContext = (ctx: Context): string => {
 
     const nameToUse = composedName || legacyName || null;
 
+    // Передаём полное имя в user_name
     if (nameToUse) {
       baseUrl.searchParams.set('user_name', nameToUse);
+    }
+    
+    // Также передаём имя и фамилию отдельно для удобства парсинга
+    if (firstName) {
+      baseUrl.searchParams.set('first_name', firstName);
+    }
+    if (lastName) {
+      baseUrl.searchParams.set('last_name', lastName);
     }
 
     const username = user?.username;

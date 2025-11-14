@@ -115,7 +115,7 @@ const SubjectsPage: React.FC = () => {
         </ul>
       </section>
 
-      <div className="subjects-version">v1.19.0</div>
+      <div className="subjects-version">v1.20.0</div>
     </div>
   );
 };
