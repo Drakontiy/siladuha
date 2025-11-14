@@ -39,6 +39,9 @@ const PeoplePage: React.FC = () => {
   const activeUser = getActiveUser();
   const socialState = useSocialState();
   
+  const [userName, setUserName] = useState<string | null>(null);
+  const [userNameLoading, setUserNameLoading] = useState(false);
+  
   // Получаем имя и фамилию из URL параметров MAX или из activeUser
   const getUserNameFromMax = () => {
     try {
@@ -79,9 +82,37 @@ const PeoplePage: React.FC = () => {
   
   const { firstName, lastName, fullName } = getUserNameFromMax();
   
-  // Если данные из URL недоступны, используем name из activeUser
-  const displayFirstName = firstName || (activeUser.name ? activeUser.name.trim().split(/\s+/)[0] : '');
-  const displayLastName = lastName || (activeUser.name ? activeUser.name.trim().split(/\s+/).slice(1).join(' ') : '');
+  // Если данные из URL недоступны, используем name из activeUser или из бэкенда
+  const displayFirstName = firstName || (userName ? userName.trim().split(/\s+/)[0] : '') || (activeUser.name ? activeUser.name.trim().split(/\s+/)[0] : '');
+  const displayLastName = lastName || (userName ? userName.trim().split(/\s+/).slice(1).join(' ') : '') || (activeUser.name ? activeUser.name.trim().split(/\s+/).slice(1).join(' ') : '');
+  
+  // Получаем имя пользователя из бэкенда, если его нет в URL
+  useEffect(() => {
+    if (activeUser.userId && activeUser.userId !== 'local' && !fullName && !activeUser.name && !userName && !userNameLoading) {
+      setUserNameLoading(true);
+      const apiBase = process.env.MINIAPP_API_BASE || window.location.origin;
+      fetch(`${apiBase}/api/user/${encodeURIComponent(activeUser.userId)}/name`, {
+        credentials: 'include',
+      })
+        .then((response) => {
+          if (response.ok) {
+            return response.json();
+          }
+          return null;
+        })
+        .then((data) => {
+          if (data?.name) {
+            setUserName(data.name);
+          }
+        })
+        .catch((error) => {
+          console.warn('Failed to fetch user name from backend:', error);
+        })
+        .finally(() => {
+          setUserNameLoading(false);
+        });
+    }
+  }, [activeUser.userId, fullName, activeUser.name, userName, userNameLoading]);
 
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -532,10 +563,13 @@ const PeoplePage: React.FC = () => {
 
   return (
     <div className="people-page">
-      {(displayFirstName || displayLastName) && (
+      {(displayFirstName || displayLastName || userNameLoading) && (
         <div className="people-name">
           {displayFirstName && <span className="people-name__first">{displayFirstName}</span>}
           {displayLastName && <span className="people-name__last">{displayLastName}</span>}
+          {userNameLoading && !displayFirstName && !displayLastName && (
+            <span className="people-name__first">Загрузка...</span>
+          )}
         </div>
       )}
       <header className="people-header">

@@ -97,6 +97,7 @@
   flex-shrink: 1;
   margin-bottom: auto;
   min-height: 0;
+  transform: translateY(35px); /* Сдвигаем вниз вместе со шляпой на половину размера шляпы */
 }
 
 .home-illustration-avatar {
@@ -120,7 +121,7 @@
   width: 70%;
   max-width: 150px;
   left: 50%;
-  bottom: 60%;
+  bottom: calc(60% - 35px); /* Сдвигаем вниз на половину размера шляпы (70px = 150px/2 примерно) */
   transform: translateX(-50%);
   pointer-events: none;
 }
@@ -133,6 +134,7 @@
   flex-shrink: 0;
   padding: 0 16px;
   width: 100%;
+  transform: translateY(35px); /* Сдвигаем вниз вместе со шляпой на половину размера шляпы */
 }
 
 .home-customize-button {

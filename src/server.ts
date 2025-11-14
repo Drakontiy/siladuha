@@ -26,7 +26,7 @@ import {
   notifyFriendRequestCreated,
   notifyFriendRequestDeclined,
 } from './services/notifications';
-import { updateFriendNames } from './services/userInfo';
+import { updateFriendNames, getUserNameFromBot } from './services/userInfo';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -448,6 +448,24 @@ app.get(`${API_BASE_PATH}/user/:userId/state`, async (req, res) => {
   } catch (error) {
     console.error('❌ Failed to read user state:', error);
     res.status(500).json({ error: 'Failed to read user state' });
+  }
+});
+
+// Эндпоинт для получения имени пользователя
+app.get(`${API_BASE_PATH}/user/:userId/name`, async (req, res) => {
+  const userId = sanitizeUserId(req.params.userId);
+  if (!userId) {
+    res.status(400).json({ error: 'Invalid user id' });
+    return;
+  }
+
+  try {
+    const userName = await getUserNameFromBot(userId);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ userId, name: userName });
+  } catch (error) {
+    console.error('❌ Failed to get user name:', error);
+    res.status(500).json({ error: 'Failed to get user name' });
   }
 });
 
