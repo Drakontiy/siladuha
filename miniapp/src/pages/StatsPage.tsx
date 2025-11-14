@@ -340,7 +340,7 @@ const StatsPage: React.FC = () => {
   }, [activeUser.userId, activeUser.name, userName, userNameLoading]);
 
   const { firstName, lastName, fullName } = getUserNameFromMax();
-  const displayUserName = fullName || userName || activeUser.name || activeUser.username || 'Я';
+  const displayUserName = fullName || userName || activeUser.name || activeUser.username || null;
 
   const availableFriends: Friend[] = useMemo(
     () =>
@@ -391,7 +391,9 @@ const StatsPage: React.FC = () => {
           onChange={handleSelectedUserChange}
         >
           <option value={activeUserId}>
-            {userNameLoading && !displayUserName ? 'Загрузка...' : displayUserName + ' (вы)'}
+            {userNameLoading && !displayUserName 
+              ? 'Загрузка... (Вы)' 
+              : (displayUserName || activeUser.userId || 'Пользователь') + ' (Вы)'}
           </option>
           {availableFriends.map((friend) => (
             <option key={friend.userId} value={friend.userId} disabled={!friend.shareTheirStatsWithMe}>

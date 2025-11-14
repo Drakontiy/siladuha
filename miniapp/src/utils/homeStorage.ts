@@ -650,7 +650,7 @@ export const processPendingDays = (
     const previousRewardedHours = existingGoal?.productiveRewardedHours ?? 0;
 
     const productiveHours = Math.floor(productiveMinutes / 60);
-    
+
     // Обновляем productiveRewardedHours, но не начисляем газ здесь
     // Газ начисляется в реальном времени при изменении интервалов
 

@@ -77,15 +77,15 @@ const SubjectsPage: React.FC = () => {
     return (Object.keys(ACHIEVEMENTS_CONFIG) as AchievementKey[])
       .filter((key) => ACHIEVEMENTS_CONFIG[key].visible) // Фильтруем только видимые достижения
       .map((key) => {
-        const flag = homeState.achievements[key];
-        return {
-          key,
-          title: ACHIEVEMENTS_CONFIG[key].title,
-          description: flag.unlocked ? ACHIEVEMENTS_CONFIG[key].description : '???',
-          unlocked: flag.unlocked,
-          unlockedAtLabel: formatUnlockedAt(flag.unlockedAt),
-        };
-      });
+      const flag = homeState.achievements[key];
+      return {
+        key,
+        title: ACHIEVEMENTS_CONFIG[key].title,
+        description: flag.unlocked ? ACHIEVEMENTS_CONFIG[key].description : '???',
+        unlocked: flag.unlocked,
+        unlockedAtLabel: formatUnlockedAt(flag.unlockedAt),
+      };
+    });
   }, [homeState.achievements]);
 
   return (

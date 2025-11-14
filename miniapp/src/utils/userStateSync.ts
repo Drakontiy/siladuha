@@ -109,16 +109,16 @@ const cloneCosmeticCategoryState = (
   
   // Проверяем, что sourceMap - объект, перед итерацией
   if (sourceMap && typeof sourceMap === 'object') {
-    (Object.keys(sourceMap) as AchievementKey[]).forEach((key) => {
+  (Object.keys(sourceMap) as AchievementKey[]).forEach((key) => {
       try {
-        const cloned = cloneCosmeticThemeProgress(sourceMap[key]);
-        if (cloned) {
-          byAchievement[key] = cloned;
+    const cloned = cloneCosmeticThemeProgress(sourceMap[key]);
+    if (cloned) {
+      byAchievement[key] = cloned;
         }
       } catch (error) {
         console.warn(`⚠️ [SYNC] Failed to clone cosmetic progress for ${key}:`, error);
-      }
-    });
+    }
+  });
   }
 
   const active = category.activeSelection;
@@ -211,10 +211,10 @@ const cloneSocialState = (state: SocialState): SocialState => {
   const cloned = {
     friends: state.friends.map((friend) => ({ ...friend, displayName: friend.displayName ?? null })),
     friendRequests: state.friendRequests.map((request) => ({ ...request, counterpartName: request.counterpartName ?? null })),
-    notifications: state.notifications.map((notification) => ({
-      ...notification,
-      payload: notification.payload ? { ...notification.payload } : undefined,
-    })),
+  notifications: state.notifications.map((notification) => ({
+    ...notification,
+    payload: notification.payload ? { ...notification.payload } : undefined,
+  })),
   };
   
   console.log('🔍 [CLONE] Cloning social state:', {
@@ -335,7 +335,7 @@ const performSync = async () => {
 
     // Читаем текст ответа один раз
     const responseText = await response.text();
-    
+
     if (!response.ok) {
       console.error('❌ [SYNC] Server error response:', responseText);
       throw new Error(`Sync failed with status ${response.status}: ${responseText.substring(0, 200)}`);
@@ -385,9 +385,9 @@ const performSync = async () => {
           hasHats: !!payload.homeState.cosmetics?.hats,
           achievements: Object.keys(payload.homeState.achievements || {}),
         });
-        homeState = cloneHomeState(payload.homeState);
+      homeState = cloneHomeState(payload.homeState);
         console.log('🟢 [SYNC] HomeState cloned successfully');
-        writeLocalJson('home_state', homeState);
+      writeLocalJson('home_state', homeState);
       } catch (error) {
         console.error('❌ [SYNC] Error cloning home state from server:', error);
         console.error('❌ [SYNC] Error details:', error instanceof Error ? error.stack : String(error));
