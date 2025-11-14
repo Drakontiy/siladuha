@@ -40,7 +40,7 @@ const PeoplePage: React.FC = () => {
   const socialState = useSocialState();
   
   // Получаем имя и фамилию из Telegram WebApp, если доступны
-  const getUserName = () => {
+  const getUserNameFromTelegram = () => {
     try {
       const telegram = (window as unknown as { 
         Telegram?: { 
@@ -56,31 +56,30 @@ const PeoplePage: React.FC = () => {
       }).Telegram;
       const user = telegram?.WebApp?.initDataUnsafe?.user;
       if (user) {
+        const firstName = user.first_name ?? '';
+        const lastName = user.last_name ?? '';
         return {
-          firstName: user.first_name ?? '',
-          lastName: user.last_name ?? '',
+          firstName,
+          lastName,
+          fullName: [firstName, lastName].filter(Boolean).join(' ').trim() || null,
         };
       }
     } catch {
       // Игнорируем ошибки
     }
     
-    // Если Telegram WebApp недоступен, пытаемся разделить name по пробелу
-    if (activeUser.name) {
-      const parts = activeUser.name.trim().split(/\s+/);
-      return {
-        firstName: parts[0] || '',
-        lastName: parts.slice(1).join(' ') || '',
-      };
-    }
-    
     return {
       firstName: '',
       lastName: '',
+      fullName: null,
     };
   };
   
-  const { firstName, lastName } = getUserName();
+  const { firstName, lastName, fullName } = getUserNameFromTelegram();
+  
+  // Если Telegram WebApp недоступен, используем name из activeUser
+  const displayFirstName = firstName || (activeUser.name ? activeUser.name.trim().split(/\s+/)[0] : '');
+  const displayLastName = lastName || (activeUser.name ? activeUser.name.trim().split(/\s+/).slice(1).join(' ') : '');
 
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -315,9 +314,11 @@ const PeoplePage: React.FC = () => {
     setError(null);
 
     try {
+      // Передаём имя из Telegram WebApp или из activeUser
+      const requesterName = fullName || activeUser.name || activeUser.username || null;
       const updatedSocial = await sendFriendRequest(
         trimmed,
-        activeUser.name ?? activeUser.username ?? null,
+        requesterName,
       );
       setSocialState(updatedSocial);
       setMessage('Заявка отправлена');
@@ -339,10 +340,12 @@ const PeoplePage: React.FC = () => {
     setError(null);
 
     try {
+      // Передаём имя из Telegram WebApp или из activeUser
+      const responderName = fullName || activeUser.name || activeUser.username || null;
       const updatedSocial = await respondToFriendRequest(
         request.id,
         action,
-        activeUser.name ?? activeUser.username ?? null,
+        responderName,
       );
       setSocialState(updatedSocial);
       setMessage(action === 'accepted' ? 'Друг добавлен' : 'Заявка отклонена');
@@ -527,10 +530,10 @@ const PeoplePage: React.FC = () => {
 
   return (
     <div className="people-page">
-      {(firstName || lastName) && (
+      {(displayFirstName || displayLastName) && (
         <div className="people-name">
-          {firstName && <span className="people-name__first">{firstName}</span>}
-          {lastName && <span className="people-name__last">{lastName}</span>}
+          {displayFirstName && <span className="people-name__first">{displayFirstName}</span>}
+          {displayLastName && <span className="people-name__last">{displayLastName}</span>}
         </div>
       )}
       <header className="people-header">
