@@ -79,17 +79,33 @@ const ActivityPieChart: React.FC<ActivityPieChartProps> = ({ data, dayCount }) =
       const radius = 80;
       const center = 90;
 
-      const startX = center + radius * Math.cos(startRadians);
-      const startY = center + radius * Math.sin(startRadians);
-      const endX = center + radius * Math.cos(endRadians);
-      const endY = center + radius * Math.sin(endRadians);
+      // Для полного круга (360 градусов) используем специальный путь
+      let d: string;
+      if (Math.abs(angle - 360) < 0.01) {
+        // Полный круг - рисуем как замкнутый круг (две полуокружности)
+        // Перемещаемся к начальной точке (слева от центра) и рисуем две полуокружности
+        const startX = center - radius;
+        const startY = center;
+        d = [
+          `M ${center} ${center}`,
+          `L ${startX} ${startY}`,
+          `A ${radius} ${radius} 0 1 1 ${center + radius} ${center}`,
+          `A ${radius} ${radius} 0 1 1 ${startX} ${startY}`,
+          'Z',
+        ].join(' ');
+      } else {
+        const startX = center + radius * Math.cos(startRadians);
+        const startY = center + radius * Math.sin(startRadians);
+        const endX = center + radius * Math.cos(endRadians);
+        const endY = center + radius * Math.sin(endRadians);
 
-      const d = [
-        `M ${center} ${center}`,
-        `L ${startX} ${startY}`,
-        `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${endX} ${endY}`,
-        'Z',
-      ].join(' ');
+        d = [
+          `M ${center} ${center}`,
+          `L ${startX} ${startY}`,
+          `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${endX} ${endY}`,
+          'Z',
+        ].join(' ');
+      }
 
       const midAngle = startAngle + angle / 2;
 

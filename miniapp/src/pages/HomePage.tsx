@@ -220,7 +220,19 @@ const HomePage: React.FC = () => {
       ? `Осталось ${formatDuration(remainingMinutes)}`
       : null;
 
-  const streakImage = homeState.currentStreak > 0 ? 'media/happy1.svg' : 'media/sad.svg';
+  // Выбираем изображение в зависимости от количества дней в ударе
+  // 0 дней → sad.svg, 1-7 дней → happy1-7.svg, 8+ дней → happy7.svg
+  const getStreakImage = (streak: number): string => {
+    if (streak <= 0) {
+      return 'media/sad.svg';
+    }
+    if (streak >= 7) {
+      return 'media/happy7.svg';
+    }
+    return `media/happy${streak}.svg`;
+  };
+  
+  const streakImage = getStreakImage(homeState.currentStreak);
   const streakImageAlt = homeState.currentStreak > 0 ? 'Отличное настроение' : 'Пора собраться';
 
   const backgroundStyleDef = useMemo(() => getHomeBackgroundStyle(homeState), [homeState]);
