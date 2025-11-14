@@ -26,6 +26,7 @@ import {
   notifyFriendRequestCreated,
   notifyFriendRequestDeclined,
 } from './services/notifications';
+import { updateFriendNames } from './services/userInfo';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -395,6 +396,29 @@ app.get(`${API_BASE_PATH}/user/:userId/state`, async (req, res) => {
 
   try {
     const state = await readUserState(userId);
+    
+    // Автоматически обновляем имена друзей через бота (только для отсутствующих имён)
+    if (state.social?.friends && state.social.friends.length > 0) {
+      try {
+        const updatedFriends = await updateFriendNames(state.social.friends, false);
+        if (updatedFriends !== state.social.friends) {
+          // Сохраняем обновлённое состояние только если были изменения
+          const updatedSocial = {
+            ...state.social,
+            friends: updatedFriends,
+          };
+          await writeUserState(userId, {
+            ...state,
+            social: updatedSocial,
+          });
+          state.social = updatedSocial;
+        }
+      } catch (updateError) {
+        // Игнорируем ошибки обновления имён, чтобы не блокировать ответ
+        console.warn('⚠️ Failed to update friend names:', updateError);
+      }
+    }
+    
     res.setHeader('Cache-Control', 'no-store');
     res.json(state);
   } catch (error) {
