@@ -223,12 +223,16 @@ const HomePage: React.FC = () => {
   // 0 дней → sad.svg, 1-7 дней → happy1-7.svg, 8+ дней → happy7.svg
   const getStreakImage = (streak: number): string => {
     if (streak <= 0) {
-      return 'media/sad/sad.svg';
+      return 'media/fire/sad.svg';
     }
     if (streak >= 7) {
-      return 'media/happy/happy7.svg';
+      return 'media/fire/Happy7.svg';
     }
-    return `media/happy/happy${streak}.svg`;
+    if (streak === 1 || streak === 2) {
+      return `media/fire/happy${streak}.svg`;
+    }
+    // Для streak 3-6 используем Happy3.svg и т.д. (с заглавной H)
+    return `media/fire/Happy${streak}.svg`;
   };
   
   const streakImage = getStreakImage(homeState.currentStreak);

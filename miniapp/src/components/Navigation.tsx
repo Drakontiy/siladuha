@@ -27,7 +27,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, onNavigate }) => {
           aria-label={icon.alt}
         >
           <img
-            src={`media/nav/${icon.svg}`}
+            src={`media/icons/${icon.svg}`}
             alt={icon.alt}
             className="nav-icon-img"
           />

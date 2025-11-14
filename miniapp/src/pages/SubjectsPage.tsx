@@ -42,7 +42,7 @@ const ACHIEVEMENTS_CONFIG: Record<
   healthySleep: {
     title: 'Здоровый сон',
     description: 'Проспать 56 часов за неделю',
-    visible: false, // Скрытое достижение
+    visible: true,
   },
 };
 
@@ -136,7 +136,7 @@ const SubjectsPage: React.FC = () => {
         </ul>
       </section>
 
-      <div className="subjects-version">v1.25.0</div>
+      <div className="subjects-version">v1.26.0</div>
     </div>
   );
 };

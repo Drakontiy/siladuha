@@ -74,7 +74,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onCodeGenerated }) => {
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-illustration">
-          <img src="media/happy/happy1.svg" alt="Добро пожаловать" className="auth-image" />
+          <img src="media/fire/happy1.svg" alt="Добро пожаловать" className="auth-image" />
         </div>
         
         <div className="auth-content">

@@ -42,13 +42,14 @@ export type ThemeLevelDefinition =
   | { kind: 'color'; value: string }
   | { kind: 'image'; value: string };
 
-// Вспомогательная функция для получения первого файла из папки
-const getFirstLevelFromFolder = (folderName: string, maxLevel: number = 10): ThemeLevelDefinition[] => {
+// Вспомогательная функция для получения файлов из папки
+// Использует реальные имена файлов из папок
+const getFirstLevelFromFolder = (folderName: string, fileNames: string[]): ThemeLevelDefinition[] => {
   const levels: ThemeLevelDefinition[] = [];
-  // Первый файл - это первый уровень (бесплатный), остальные можно покупать
-  for (let i = 1; i <= maxLevel; i++) {
-    levels.push({ kind: 'image', value: `media/${folderName}/${folderName}${i}.svg` });
-  }
+  // Первый файл - это первый уровень (бесплатный при получении достижения), остальные можно покупать
+  fileNames.forEach((fileName) => {
+    levels.push({ kind: 'image', value: `media/${folderName}/${fileName}` });
+  });
   return levels;
 };
 
@@ -65,7 +66,7 @@ const ACHIEVEMENT_THEME_CONFIG: Record<
 > = {
   workDay: {
     category: 'backgrounds',
-    levels: getFirstLevelFromFolder('green', 10),
+    levels: getFirstLevelFromFolder('green', ['HatFrog1.svg']),
     baseCost: 100,
     title: 'Рабочий день',
     description: 'Проработать 8 часов за день',
@@ -73,7 +74,7 @@ const ACHIEVEMENT_THEME_CONFIG: Record<
   },
   firstGoalCompleted: {
     category: 'backgrounds',
-    levels: getFirstLevelFromFolder('forest', 10),
+    levels: getFirstLevelFromFolder('forest', ['forest0.svg', 'forest1.svg', 'forest2.svg', 'forest3.svg']),
     baseCost: 100,
     title: 'Первый шаг',
     description: 'Выполните дневную цель',
@@ -81,7 +82,7 @@ const ACHIEVEMENT_THEME_CONFIG: Record<
   },
   planner: {
     category: 'backgrounds',
-    levels: getFirstLevelFromFolder('blue', 10),
+    levels: getFirstLevelFromFolder('blue', ['HatCat1.svg']),
     baseCost: 100,
     title: 'Планровщик',
     description: 'Установите цель на завтра',
@@ -89,7 +90,7 @@ const ACHIEVEMENT_THEME_CONFIG: Record<
   },
   sociality: {
     category: 'backgrounds',
-    levels: getFirstLevelFromFolder('red', 10),
+    levels: getFirstLevelFromFolder('red', ['HatDefault1.svg', 'HatHeart2.svg', 'HatBerry3.svg']),
     baseCost: 100,
     title: 'Социальность',
     description: 'Добавьте друга',
@@ -97,7 +98,7 @@ const ACHIEVEMENT_THEME_CONFIG: Record<
   },
   focus: {
     category: 'backgrounds',
-    levels: getFirstLevelFromFolder('coast', 10),
+    levels: getFirstLevelFromFolder('fire', ['happy1.svg', 'happy2.svg', 'Happy3.svg', 'Happy4.svg', 'Happy5.svg', 'Happy6.svg', 'Happy7.svg']),
     baseCost: 100,
     title: 'Фокус',
     description: 'Завершите 30 минут работы',
@@ -105,11 +106,11 @@ const ACHIEVEMENT_THEME_CONFIG: Record<
   },
   healthySleep: {
     category: 'backgrounds',
-    levels: getFirstLevelFromFolder('yellow', 10),
+    levels: getFirstLevelFromFolder('yellow', ['HatSun1.svg', 'HatCacke2.svg']),
     baseCost: 100,
     title: 'Здоровый сон',
     description: 'Проспать 56 часов за неделю',
-    visible: false, // Скрытое достижение
+    visible: true,
   },
 };
 
