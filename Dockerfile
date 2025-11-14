@@ -5,6 +5,14 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Build-аргументы для переменных окружения, используемых при сборке
+ARG MINIAPP_API_BASE=
+ARG MINIAPP_URL=
+
+# Устанавливаем переменные окружения для сборки
+ENV MINIAPP_API_BASE=${MINIAPP_API_BASE}
+ENV MINIAPP_URL=${MINIAPP_URL}
+
 # Копируем файлы зависимостей
 COPY package*.json ./
 COPY tsconfig.json ./
@@ -19,7 +27,7 @@ COPY miniapp/ ./miniapp/
 COPY media/ ./media/
 COPY scripts/ ./scripts/
 
-# Собираем проект
+# Собираем проект (MINIAPP_API_BASE будет встроена в клиентский код через webpack)
 RUN npm run build
 
 # Этап 2: Production образ

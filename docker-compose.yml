@@ -5,6 +5,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Передаём переменные окружения как build-аргументы
+        # MINIAPP_API_BASE встраивается в клиентский код во время сборки
+        MINIAPP_API_BASE: ${MINIAPP_API_BASE:-}
+        MINIAPP_URL: ${MINIAPP_URL:-}
     container_name: max-bot-miniapp
     restart: unless-stopped
     ports:
