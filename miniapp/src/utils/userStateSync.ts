@@ -207,14 +207,24 @@ const stateListeners = new Set<() => void>();
 const cloneActivityData = (data: ActivityData): ActivityData =>
   JSON.parse(JSON.stringify(data ?? {}));
 
-const cloneSocialState = (state: SocialState): SocialState => ({
-  friends: state.friends.map((friend) => ({ ...friend })),
-  friendRequests: state.friendRequests.map((request) => ({ ...request })),
-  notifications: state.notifications.map((notification) => ({
-    ...notification,
-    payload: notification.payload ? { ...notification.payload } : undefined,
-  })),
-});
+const cloneSocialState = (state: SocialState): SocialState => {
+  const cloned = {
+    friends: state.friends.map((friend) => ({ ...friend, displayName: friend.displayName ?? null })),
+    friendRequests: state.friendRequests.map((request) => ({ ...request, counterpartName: request.counterpartName ?? null })),
+    notifications: state.notifications.map((notification) => ({
+      ...notification,
+      payload: notification.payload ? { ...notification.payload } : undefined,
+    })),
+  };
+  
+  console.log('🔍 [CLONE] Cloning social state:', {
+    friendsCount: cloned.friends.length,
+    friendsWithNames: cloned.friends.filter(f => f.displayName).length,
+    friends: cloned.friends.map(f => ({ userId: f.userId, displayName: f.displayName })),
+  });
+  
+  return cloned;
+};
 
 socialState = cloneSocialState(DEFAULT_SOCIAL_STATE);
 
@@ -385,9 +395,20 @@ const performSync = async () => {
       }
     }
     if (payload.social) {
-      console.log('🟢 [SYNC] Updating social');
+      console.log('🟢 [SYNC] Updating social from POST response:', {
+        friendsCount: payload.social.friends?.length || 0,
+        friendsWithNames: payload.social.friends?.filter(f => f.displayName).length || 0,
+        friendRequestsCount: payload.social.friendRequests?.length || 0,
+        requestsWithNames: payload.social.friendRequests?.filter(r => r.counterpartName).length || 0,
+        friends: payload.social.friends?.map(f => ({ userId: f.userId, displayName: f.displayName })) || [],
+      });
       socialState = cloneSocialState(payload.social);
       writeLocalJson('social_state', socialState);
+      console.log('🟢 [SYNC] Social state updated and saved:', {
+        friendsCount: socialState.friends?.length || 0,
+        friendsWithNames: socialState.friends?.filter(f => f.displayName).length || 0,
+        friends: socialState.friends?.map(f => ({ userId: f.userId, displayName: f.displayName })) || [],
+      });
     }
 
     console.log('✅ [SYNC] Sync completed successfully');
@@ -453,7 +474,14 @@ export const initializeUserStateSync = async (): Promise<void> => {
     homeState = cloneHomeState(DEFAULT_HOME_STATE);
   }
   
-  socialState = cloneSocialState(readLocalJson<SocialState>('social_state', { ...DEFAULT_SOCIAL_STATE }));
+  const loadedSocial = readLocalJson<SocialState>('social_state', { ...DEFAULT_SOCIAL_STATE });
+  console.log('🟡 [INIT] Loading social state from localStorage:', {
+    friendsCount: loadedSocial?.friends?.length || 0,
+    friendsWithNames: loadedSocial?.friends?.filter(f => f.displayName).length || 0,
+    friendRequestsCount: loadedSocial?.friendRequests?.length || 0,
+    requestsWithNames: loadedSocial?.friendRequests?.filter(r => r.counterpartName).length || 0,
+  });
+  socialState = cloneSocialState(loadedSocial);
 
   if (activeUserId === DEFAULT_USER_ID) {
     initialized = true;
@@ -483,8 +511,19 @@ export const initializeUserStateSync = async (): Promise<void> => {
         writeLocalJson('home_state', homeState);
       }
       if (payload.social) {
+        console.log('🟡 [SYNC] Social state from server:', {
+          friendsCount: payload.social.friends?.length || 0,
+          friendRequestsCount: payload.social.friendRequests?.length || 0,
+          friendsWithNames: payload.social.friends?.filter(f => f.displayName).length || 0,
+          requestsWithNames: payload.social.friendRequests?.filter(r => r.counterpartName).length || 0,
+          friends: payload.social.friends?.map(f => ({ userId: f.userId, displayName: f.displayName })) || [],
+        });
         socialState = cloneSocialState(payload.social);
         writeLocalJson('social_state', socialState);
+        console.log('🟢 [SYNC] Social state cloned and saved:', {
+          friendsCount: socialState.friends?.length || 0,
+          friendsWithNames: socialState.friends?.filter(f => f.displayName).length || 0,
+        });
       }
 
       updateSyncStatus({

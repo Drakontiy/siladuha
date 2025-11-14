@@ -1,5 +1,6 @@
 import { bot } from '../bot';
 import { StoredFriend, StoredFriendRequest } from '../storage/userStateStore';
+import { getUserName as getCachedUserName, saveUserName as saveCachedUserName } from '../storage/userNameStore';
 
 /**
  * Преобразует строковый user_id в числовой формат для MAX Bot API
@@ -19,48 +20,22 @@ const toNumericUserId = (userId: string): number | null => {
  * Получает информацию о пользователе через MAX Bot API
  * Возвращает имя пользователя, если доступно
  */
+/**
+ * Получает имя пользователя из кэша
+ * MAX Bot API не имеет метода getUserInfo, поэтому используем сохранённые имена
+ */
 export const getUserNameFromBot = async (userId: string): Promise<string | null> => {
-  try {
-    if (!bot?.api) {
-      console.warn('⚠️ Bot API is not available to get user info.');
-      return null;
-    }
-
-    const numericUserId = toNumericUserId(userId);
-    if (numericUserId === null) {
-      return null;
-    }
-
-    // Пытаемся получить информацию о пользователе через bot API
-    // Если метод недоступен, возвращаем null
-    try {
-      // Проверяем, есть ли метод getUserInfo или аналогичный
-      // Если метод недоступен, пытаемся другой подход
-      if (typeof (bot.api as any).getUserInfo === 'function') {
-        const userInfo = await (bot.api as any).getUserInfo(numericUserId);
-        if (userInfo?.first_name || userInfo?.last_name) {
-          const firstName = userInfo.first_name || '';
-          const lastName = userInfo.last_name || '';
-          return [firstName, lastName].filter(Boolean).join(' ').trim() || null;
-        }
-        if (userInfo?.name) {
-          return userInfo.name.trim() || null;
-        }
-      }
-    } catch (apiError) {
-      // Метод может быть недоступен, игнорируем ошибку
-      console.debug(`⚠️ Unable to get user info for ${userId}:`, apiError);
-    }
-
-    // Альтернативный подход: пробуем отправить тестовое сообщение и получить информацию
-    // Но это не совсем правильно, так как пользователь получит сообщение
-    // Поэтому лучше не использовать этот подход
-
-    return null;
-  } catch (error) {
-    console.warn(`⚠️ Failed to get user name for ${userId}:`, error);
-    return null;
+  // Проверяем сохранённое имя в кэше
+  const cachedName = getCachedUserName(userId);
+  if (cachedName) {
+    console.log(`✅ [USERINFO] Got cached name for ${userId}: ${cachedName}`);
+    return cachedName;
   }
+  
+  // MAX Bot API не имеет метода getUserInfo
+  // Имена должны сохраняться из callback при привязке кода, создании заявок и т.д.
+  console.log(`⚠️ [USERINFO] No cached name for ${userId}, getUserInfo is not available in MAX Bot API`);
+  return null;
 };
 
 /**
@@ -82,12 +57,18 @@ export const updateFriendNames = async (
   const updatePromises = updatedFriends.map(async (friend, index) => {
     // Обновляем только если имя отсутствует или updateAll = true
     if (!updateAll && friend.displayName) {
+      // Если имя уже есть, сохраняем его в кэш для будущего использования
+      saveCachedUserName(friend.userId, friend.displayName);
       return; // Пропускаем, если имя уже есть
     }
 
     try {
+      // Пытаемся получить имя из кэша или других источников
       const userName = await getUserNameFromBot(friend.userId);
       if (userName) {
+        // Сохраняем имя в кэш
+        saveCachedUserName(friend.userId, userName);
+        
         // Сохраняем имя, даже если оно уже было (может обновиться)
         if (userName !== friend.displayName) {
           updatedFriends[index] = {
@@ -98,6 +79,9 @@ export const updateFriendNames = async (
           hasUpdates = true;
           console.log(`✅ Updated name for friend ${friend.userId}: ${friend.displayName || 'null'} -> ${userName}`);
         }
+      } else if (friend.displayName) {
+        // Если имя не получено, но уже есть в друге, сохраняем его в кэш
+        saveCachedUserName(friend.userId, friend.displayName);
       }
     } catch (error) {
       // Игнорируем ошибки при обновлении отдельного имени
@@ -133,12 +117,18 @@ export const updateFriendRequestNames = async (
   const updatePromises = updatedRequests.map(async (request, index) => {
     // Обновляем только если имя отсутствует или updateAll = true
     if (!updateAll && request.counterpartName) {
+      // Если имя уже есть, сохраняем его в кэш для будущего использования
+      saveCachedUserName(request.counterpartId, request.counterpartName);
       return; // Пропускаем, если имя уже есть
     }
 
     try {
+      // Пытаемся получить имя из кэша или других источников
       const userName = await getUserNameFromBot(request.counterpartId);
       if (userName) {
+        // Сохраняем имя в кэш
+        saveCachedUserName(request.counterpartId, userName);
+        
         // Сохраняем имя, даже если оно уже было (может обновиться)
         if (userName !== request.counterpartName) {
           updatedRequests[index] = {
@@ -148,6 +138,9 @@ export const updateFriendRequestNames = async (
           hasUpdates = true;
           console.log(`✅ Updated name for request ${request.id}: ${request.counterpartId} -> ${userName}`);
         }
+      } else if (request.counterpartName) {
+        // Если имя не получено, но уже есть в заявке, сохраняем его в кэш
+        saveCachedUserName(request.counterpartId, request.counterpartName);
       }
     } catch (error) {
       // Игнорируем ошибки при обновлении отдельного имени

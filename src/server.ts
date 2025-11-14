@@ -27,6 +27,7 @@ import {
   notifyFriendRequestDeclined,
 } from './services/notifications';
 import { updateFriendNames, updateFriendRequestNames, getUserNameFromBot } from './services/userInfo';
+import { saveUserName, getUserName as getCachedUserName } from './storage/userNameStore';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -325,6 +326,11 @@ app.post(`${API_BASE_PATH}/auth/bind-code`, async (req, res) => {
     authData.userId = sanitizedUserId;
     authData.userName = userName && typeof userName === 'string' ? userName.trim() : null;
     authCodes.set(codeUpper, authData);
+    
+    // Сохраняем имя в кэш
+    if (authData.userName) {
+      saveUserName(sanitizedUserId, authData.userName);
+    }
 
     console.log(`✅ Code bound successfully: ${codeUpper} -> ${sanitizedUserId}, userName: ${authData.userName}`);
     console.log(`📋 Code data after bind:`, {
@@ -334,17 +340,6 @@ app.post(`${API_BASE_PATH}/auth/bind-code`, async (req, res) => {
       userName: authData.userName,
       bound: authData.userId !== null,
     });
-
-    // Сохраняем имя пользователя в состоянии пользователя
-    try {
-      const existingState = await readUserState(sanitizedUserId);
-      // Если имя ещё не сохранено или нужно обновить, сохраняем его
-      // Имя будет доступно через getUserNameFromBot при запросе, но сохраняем для быстрого доступа
-      // Здесь можно добавить сохранение в дополнительное поле, если нужно
-    } catch (stateError) {
-      // Игнорируем ошибки сохранения состояния, это не критично
-      console.warn('⚠️ Failed to save user state after bind:', stateError);
-    }
 
     res.setHeader('Cache-Control', 'no-store');
     res.json({ success: true, userId: sanitizedUserId });
@@ -441,58 +436,107 @@ app.get(`${API_BASE_PATH}/user/:userId/state`, async (req, res) => {
     let updatedSocial = { ...state.social };
     let hasChanges = false;
     
+    console.log(`🔍 [SERVER] Current social state for user ${userId}:`, {
+      friendsCount: state.social?.friends?.length || 0,
+      friendsWithNames: state.social?.friends?.filter(f => f.displayName).length || 0,
+      friendRequestsCount: state.social?.friendRequests?.length || 0,
+      requestsWithNames: state.social?.friendRequests?.filter(r => r.counterpartName).length || 0,
+    });
+    
+    // Сохраняем существующие имена в кэш перед обновлением
+    if (state.social?.friends) {
+      for (const friend of state.social.friends) {
+        if (friend.displayName) {
+          saveUserName(friend.userId, friend.displayName);
+        }
+      }
+    }
+    
+    if (state.social?.friendRequests) {
+      for (const request of state.social.friendRequests) {
+        if (request.counterpartName) {
+          saveUserName(request.counterpartId, request.counterpartName);
+        }
+      }
+    }
+    
     if (state.social?.friends && state.social.friends.length > 0) {
       try {
+        const beforeCount = state.social.friends.filter(f => f.displayName).length;
         const updatedFriends = await updateFriendNames(state.social.friends, false);
+        const afterCount = updatedFriends.filter(f => f.displayName).length;
+        
         // Проверяем, были ли реальные изменения в именах
         const namesChanged = updatedFriends.some((friend, index) => 
           friend.displayName !== state.social.friends[index]?.displayName
         );
-        if (namesChanged) {
+        
+        console.log(`🔍 [SERVER] Friend names update: before=${beforeCount}, after=${afterCount}, changed=${namesChanged}`);
+        
+        if (namesChanged || updatedFriends !== state.social.friends) {
           updatedSocial = {
             ...updatedSocial,
             friends: updatedFriends,
           };
           hasChanges = true;
-          console.log(`✅ Updated ${updatedFriends.filter(f => f.displayName).length} friend names`);
+          console.log(`✅ [SERVER] Updated ${afterCount} friend names out of ${updatedFriends.length}`);
         }
       } catch (updateError) {
         // Игнорируем ошибки обновления имён, чтобы не блокировать ответ
-        console.warn('⚠️ Failed to update friend names:', updateError);
+        console.warn('⚠️ [SERVER] Failed to update friend names:', updateError);
       }
     }
     
     // Автоматически обновляем имена в заявках через бота (только для отсутствующих имён)
     if (state.social?.friendRequests && state.social.friendRequests.length > 0) {
       try {
+        const beforeCount = state.social.friendRequests.filter(r => r.counterpartName).length;
         const updatedRequests = await updateFriendRequestNames(state.social.friendRequests, false);
+        const afterCount = updatedRequests.filter(r => r.counterpartName).length;
+        
         // Проверяем, были ли реальные изменения в именах
         const namesChanged = updatedRequests.some((request, index) => 
           request.counterpartName !== state.social.friendRequests[index]?.counterpartName
         );
-        if (namesChanged) {
+        
+        console.log(`🔍 [SERVER] Friend request names update: before=${beforeCount}, after=${afterCount}, changed=${namesChanged}`);
+        
+        if (namesChanged || updatedRequests !== state.social.friendRequests) {
           updatedSocial = {
             ...updatedSocial,
             friendRequests: updatedRequests,
           };
           hasChanges = true;
-          console.log(`✅ Updated ${updatedRequests.filter(r => r.counterpartName).length} friend request names`);
+          console.log(`✅ [SERVER] Updated ${afterCount} friend request names out of ${updatedRequests.length}`);
         }
       } catch (updateError) {
         // Игнорируем ошибки обновления имён, чтобы не блокировать ответ
-        console.warn('⚠️ Failed to update friend request names:', updateError);
+        console.warn('⚠️ [SERVER] Failed to update friend request names:', updateError);
       }
     }
     
     // Сохраняем обновлённое состояние только если были изменения
     if (hasChanges) {
-      console.log(`💾 Saving updated social state for user ${userId}`);
+      console.log(`💾 [SERVER] Saving updated social state for user ${userId}`);
       await writeUserState(userId, {
         ...state,
         social: updatedSocial,
       });
       state.social = updatedSocial;
+      console.log(`✅ [SERVER] Social state saved:`, {
+        friendsCount: updatedSocial.friends?.length || 0,
+        friendsWithNames: updatedSocial.friends?.filter(f => f.displayName).length || 0,
+        friends: updatedSocial.friends?.map(f => ({ userId: f.userId, displayName: f.displayName })) || [],
+      });
+    } else {
+      console.log(`ℹ️ [SERVER] No changes to social state, skipping save`);
     }
+    
+    console.log(`📤 [SERVER] Sending social state to client:`, {
+      friendsCount: state.social.friends?.length || 0,
+      friendsWithNames: state.social.friends?.filter(f => f.displayName).length || 0,
+      friends: state.social.friends?.map(f => ({ userId: f.userId, displayName: f.displayName })) || [],
+    });
     
     res.setHeader('Cache-Control', 'no-store');
     res.json(state);
@@ -511,28 +555,17 @@ app.get(`${API_BASE_PATH}/user/:userId/name`, async (req, res) => {
   }
 
   try {
-    // Сначала проверяем, есть ли сохранённое имя в authCodes
-    let userName: string | null = null;
+    // Сначала проверяем сохранённое имя в кэше
+    let userName = getCachedUserName(userId);
     
-    // Ищем сохранённое имя в authCodes (может быть несколько кодов для одного пользователя)
-    for (const [code, authData] of authCodes.entries()) {
-      if (authData.userId === userId && authData.userName) {
-        userName = authData.userName;
-        break; // Используем первое найденное имя
-      }
-    }
-    
-    // Если имя не найдено в authCodes, пытаемся получить из бота
+    // Если имя не найдено, проверяем authCodes
     if (!userName) {
-      userName = await getUserNameFromBot(userId);
-      
-      // Если получили имя из бота и есть активные коды, сохраняем его в authCodes
-      if (userName) {
-        for (const [code, authData] of authCodes.entries()) {
-          if (authData.userId === userId && !authData.userName) {
-            authData.userName = userName;
-            authCodes.set(code, authData);
-          }
+      for (const [code, authData] of authCodes.entries()) {
+        if (authData.userId === userId && authData.userName) {
+          userName = authData.userName;
+          // Сохраняем в постоянный кэш
+          saveUserName(userId, userName);
+          break;
         }
       }
     }
@@ -664,24 +697,24 @@ app.post(`${API_BASE_PATH}/user/:userId/friends/request`, async (req, res) => {
     const now = new Date().toISOString();
     const requestId = randomUUID();
 
-    // Получаем имя цели из бота, если оно не было передано
+    // Получаем имя цели из кэша, если оно не было передано
     let finalTargetName = targetName;
     if (!finalTargetName) {
-      try {
-        finalTargetName = await getUserNameFromBot(targetUserId);
-      } catch (error) {
-        console.warn(`⚠️ Failed to get target name for ${targetUserId}:`, error);
-      }
+      finalTargetName = getCachedUserName(targetUserId);
     }
     
-    // Получаем имя запрашивающего из бота, если оно не было передано
+    // Получаем имя запрашивающего из кэша, если оно не было передано
     let finalRequesterName = requesterName;
     if (!finalRequesterName) {
-      try {
-        finalRequesterName = await getUserNameFromBot(userId);
-      } catch (error) {
-        console.warn(`⚠️ Failed to get requester name for ${userId}:`, error);
-      }
+      finalRequesterName = getCachedUserName(userId);
+    }
+    
+    // Сохраняем имена в кэш, если они были переданы
+    if (targetName) {
+      saveUserName(targetUserId, targetName);
+    }
+    if (requesterName) {
+      saveUserName(userId, requesterName);
     }
 
     const outgoingRequest: StoredFriendRequest = {
@@ -798,24 +831,24 @@ app.post(`${API_BASE_PATH}/user/:userId/friends/request/:requestId/respond`, asy
       const counterpartFriendExisting = counterpartSocial.friends.find((friend) => friend.userId === userId);
       const userFriendExisting = social.friends.find((friend) => friend.userId === counterpartId);
 
-      // Получаем имя из заявки или из бота
+      // Получаем имя из заявки или из кэша
       let counterpartDisplayName = request.counterpartName;
       if (!counterpartDisplayName) {
-        try {
-          counterpartDisplayName = await getUserNameFromBot(counterpartId);
-        } catch (error) {
-          console.warn(`⚠️ Failed to get counterpart name for ${counterpartId}:`, error);
-        }
+        counterpartDisplayName = getCachedUserName(counterpartId);
       }
       
-      // Получаем имя отвечающего из переданного имени или из бота
+      // Получаем имя отвечающего из переданного имени или из кэша
       let responderDisplayName = responderName;
       if (!responderDisplayName) {
-        try {
-          responderDisplayName = await getUserNameFromBot(userId);
-        } catch (error) {
-          console.warn(`⚠️ Failed to get responder name for ${userId}:`, error);
-        }
+        responderDisplayName = getCachedUserName(userId);
+      }
+      
+      // Сохраняем имена в кэш, если они были переданы или получены
+      if (request.counterpartName) {
+        saveUserName(counterpartId, request.counterpartName);
+      }
+      if (responderName) {
+        saveUserName(userId, responderName);
       }
 
       const userFriend: StoredFriend = {

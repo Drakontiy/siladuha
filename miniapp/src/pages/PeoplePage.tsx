@@ -144,10 +144,15 @@ const PeoplePage: React.FC = () => {
     [socialState.friendRequests],
   );
 
-  const friends = useMemo(
-    () => socialState.friends.slice().sort((a, b) => a.userId.localeCompare(b.userId)),
-    [socialState.friends],
-  );
+  const friends = useMemo(() => {
+    const sorted = socialState.friends.slice().sort((a, b) => a.userId.localeCompare(b.userId));
+    console.log('👥 [PEOPLE] Friends list:', {
+      total: sorted.length,
+      withNames: sorted.filter(f => f.displayName).length,
+      friends: sorted.map(f => ({ userId: f.userId, displayName: f.displayName || 'NO NAME' })),
+    });
+    return sorted;
+  }, [socialState.friends]);
 
   const selectedFriend = useMemo(
     () => friends.find((friend) => friend.userId === selectedFriendId) ?? null,
