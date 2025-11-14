@@ -97,21 +97,37 @@ const cloneCosmeticThemeProgress = (
 };
 
 const cloneCosmeticCategoryState = (
-  category: HomeState['cosmetics'][CosmeticCategory],
+  category: HomeState['cosmetics'][CosmeticCategory] | any,
 ): HomeState['cosmetics'][CosmeticCategory] => {
+  // Безопасная проверка на существование и тип объекта
+  if (!category || typeof category !== 'object') {
+    return { byAchievement: {}, activeSelection: null };
+  }
+
   const byAchievement: HomeState['cosmetics'][CosmeticCategory]['byAchievement'] = {};
   const sourceMap = category.byAchievement ?? {};
-  (Object.keys(sourceMap) as AchievementKey[]).forEach((key) => {
-    const cloned = cloneCosmeticThemeProgress(sourceMap[key]);
-    if (cloned) {
-      byAchievement[key] = cloned;
-    }
-  });
+  
+  // Проверяем, что sourceMap - объект, перед итерацией
+  if (sourceMap && typeof sourceMap === 'object') {
+    (Object.keys(sourceMap) as AchievementKey[]).forEach((key) => {
+      try {
+        const cloned = cloneCosmeticThemeProgress(sourceMap[key]);
+        if (cloned) {
+          byAchievement[key] = cloned;
+        }
+      } catch (error) {
+        console.warn(`⚠️ [SYNC] Failed to clone cosmetic progress for ${key}:`, error);
+      }
+    });
+  }
 
   const active = category.activeSelection;
   const activeSelection =
-    active && typeof active.source === 'string' && typeof active.level === 'number'
-      ? { source: active.source, level: active.level }
+    active && 
+    typeof active === 'object' &&
+    typeof active.source === 'string' && 
+    typeof active.level === 'number'
+      ? { source: active.source as AchievementKey, level: active.level }
       : null;
 
   return {
@@ -124,14 +140,27 @@ const cloneCosmetics = (cosmetics: HomeState['cosmetics'] | any): HomeState['cos
   // Миграция: добавляем hats категорию, если её нет в старых данных
   const oldCosmetics = cosmetics || {};
   
-  return {
-    backgrounds: oldCosmetics.backgrounds 
-      ? cloneCosmeticCategoryState(oldCosmetics.backgrounds)
-      : { byAchievement: {}, activeSelection: null },
-    hats: oldCosmetics.hats 
-      ? cloneCosmeticCategoryState(oldCosmetics.hats)
-      : { byAchievement: {}, activeSelection: null },
-  };
+  try {
+    // Поддерживаем миграцию со старыми именами полей
+    const backgroundsSource = oldCosmetics.backgrounds ?? oldCosmetics.homeBackground;
+    const hatsSource = oldCosmetics.hats ?? oldCosmetics.homeHat;
+    
+    return {
+      backgrounds: backgroundsSource
+        ? cloneCosmeticCategoryState(backgroundsSource)
+        : { byAchievement: {}, activeSelection: null },
+      hats: hatsSource
+        ? cloneCosmeticCategoryState(hatsSource)
+        : { byAchievement: {}, activeSelection: null },
+    };
+  } catch (error) {
+    console.error('❌ [SYNC] Failed to clone cosmetics:', error);
+    // Возвращаем дефолтное состояние при ошибке
+    return {
+      backgrounds: { byAchievement: {}, activeSelection: null },
+      hats: { byAchievement: {}, activeSelection: null },
+    };
+  }
 };
 
 const cloneHomeState = (state: HomeState | any): HomeState => {
@@ -294,24 +323,41 @@ const performSync = async () => {
 
     console.log('🟡 [SYNC] Response status:', response.status, response.statusText);
 
+    // Читаем текст ответа один раз
+    const responseText = await response.text();
+    
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ [SYNC] Server error response:', errorText);
-      throw new Error(`Sync failed with status ${response.status}: ${errorText.substring(0, 200)}`);
+      console.error('❌ [SYNC] Server error response:', responseText);
+      throw new Error(`Sync failed with status ${response.status}: ${responseText.substring(0, 200)}`);
     }
 
-    const payload = (await response.json()) as {
+    let payload: {
       activityData?: ActivityData;
       homeState?: HomeState;
       social?: SocialState;
       updatedAt?: string;
     };
+    
+    try {
+      console.log('🟡 [SYNC] Response JSON length:', responseText.length);
+      payload = JSON.parse(responseText) as {
+        activityData?: ActivityData;
+        homeState?: HomeState;
+        social?: SocialState;
+        updatedAt?: string;
+      };
+    } catch (parseError) {
+      console.error('❌ [SYNC] Failed to parse JSON response:', parseError);
+      console.error('❌ [SYNC] Response text (first 500 chars):', responseText.substring(0, 500));
+      throw new Error(`Failed to parse server response: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+    }
 
     console.log('🟡 [SYNC] Received payload:', {
       hasActivityData: !!payload.activityData,
       hasHomeState: !!payload.homeState,
       hasSocial: !!payload.social,
       updatedAt: payload.updatedAt,
+      payloadKeys: Object.keys(payload),
     });
 
     if (payload.activityData) {
