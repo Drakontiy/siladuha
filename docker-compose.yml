@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  max-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: max-bot-miniapp
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Токен бота (обязательно!)
+      - BOT_TOKEN=${BOT_TOKEN}
+      # URL Mini App (для запуска внутри MAX требуется HTTPS)
+      - MINIAPP_URL=${MINIAPP_URL:-http://localhost:3000}
+      # Базовый URL API (оставьте пустым для автоматического определения)
+      - MINIAPP_API_BASE=${MINIAPP_API_BASE:-}
+      # Порт сервера
+      - PORT=${PORT:-3000}
+      # Node environment
+      - NODE_ENV=production
+    volumes:
+      # Монтируем директорию с данными пользователей для персистентности
+      - ./data:/app/data
+    networks:
+      - max-bot-network
+
+networks:
+  max-bot-network:
+    driver: bridge
+

@@ -1,0 +1,53 @@
+# Зависимости
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Сборка (будет пересобрана в Docker)
+dist
+miniapp/dist
+docs
+
+# Данные пользователей (будут в volume)
+data/
+
+# Логи
+*.log
+ngrok.log
+
+# Переменные окружения (передаются через docker-compose или -e)
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Временные файлы
+.DS_Store
+Thumbs.db
+
+# Документация (не нужна в образе)
+README.md
+CHECKLIST.md
+TROUBLESHOOTING.md
+
+# Тесты (если есть)
+*.test.ts
+*.test.tsx
+test/
+tests/
+
