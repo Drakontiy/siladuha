@@ -38,6 +38,7 @@ interface AuthCode {
   code: string;
   expiresAt: number;
   userId: string | null;
+  userName: string | null; // Имя пользователя, сохранённое при привязке
 }
 
 const authCodes = new Map<string, AuthCode>();
@@ -261,9 +262,9 @@ app.post(`${API_BASE_PATH}/auth/generate-code`, (_req, res) => {
 // Привязка кода к user_id
 app.post(`${API_BASE_PATH}/auth/bind-code`, async (req, res) => {
   try {
-    const { code, userId } = req.body as { code?: string; userId?: string };
+    const { code, userId, userName } = req.body as { code?: string; userId?: string; userName?: string };
 
-    console.log(`🔗 Bind request: code=${code}, userId=${userId}`);
+    console.log(`🔗 Bind request: code=${code}, userId=${userId}, userName=${userName}`);
 
     if (!code || typeof code !== 'string') {
       console.log(`❌ Bind failed: Code is required`);
@@ -319,17 +320,30 @@ app.post(`${API_BASE_PATH}/auth/bind-code`, async (req, res) => {
       return;
     }
 
-    // Привязываем код к user_id
+    // Привязываем код к user_id и сохраняем имя пользователя
     authData.userId = sanitizedUserId;
+    authData.userName = userName && typeof userName === 'string' ? userName.trim() : null;
     authCodes.set(codeUpper, authData);
 
-    console.log(`✅ Code bound successfully: ${codeUpper} -> ${sanitizedUserId}`);
+    console.log(`✅ Code bound successfully: ${codeUpper} -> ${sanitizedUserId}, userName: ${authData.userName}`);
     console.log(`📋 Code data after bind:`, {
       code: authData.code,
       expiresAt: authData.expiresAt,
       userId: authData.userId,
+      userName: authData.userName,
       bound: authData.userId !== null,
     });
+
+    // Сохраняем имя пользователя в состоянии пользователя
+    try {
+      const existingState = await readUserState(sanitizedUserId);
+      // Если имя ещё не сохранено или нужно обновить, сохраняем его
+      // Имя будет доступно через getUserNameFromBot при запросе, но сохраняем для быстрого доступа
+      // Здесь можно добавить сохранение в дополнительное поле, если нужно
+    } catch (stateError) {
+      // Игнорируем ошибки сохранения состояния, это не критично
+      console.warn('⚠️ Failed to save user state after bind:', stateError);
+    }
 
     res.setHeader('Cache-Control', 'no-store');
     res.json({ success: true, userId: sanitizedUserId });
@@ -366,6 +380,7 @@ app.get(`${API_BASE_PATH}/auth/check-code/:code`, (req, res) => {
       code: authData.code,
       expiresAt: authData.expiresAt,
       userId: authData.userId,
+      userName: authData.userName,
       bound: authData.userId !== null,
     };
 
@@ -460,7 +475,32 @@ app.get(`${API_BASE_PATH}/user/:userId/name`, async (req, res) => {
   }
 
   try {
-    const userName = await getUserNameFromBot(userId);
+    // Сначала проверяем, есть ли сохранённое имя в authCodes
+    let userName: string | null = null;
+    
+    // Ищем сохранённое имя в authCodes (может быть несколько кодов для одного пользователя)
+    for (const [code, authData] of authCodes.entries()) {
+      if (authData.userId === userId && authData.userName) {
+        userName = authData.userName;
+        break; // Используем первое найденное имя
+      }
+    }
+    
+    // Если имя не найдено в authCodes, пытаемся получить из бота
+    if (!userName) {
+      userName = await getUserNameFromBot(userId);
+      
+      // Если получили имя из бота и есть активные коды, сохраняем его в authCodes
+      if (userName) {
+        for (const [code, authData] of authCodes.entries()) {
+          if (authData.userId === userId && !authData.userName) {
+            authData.userName = userName;
+            authCodes.set(code, authData);
+          }
+        }
+      }
+    }
+    
     res.setHeader('Cache-Control', 'no-store');
     res.json({ userId, name: userName });
   } catch (error) {

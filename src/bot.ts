@@ -267,11 +267,23 @@ bot.on('message_callback', async (ctx) => {
       return;
     }
 
+    // Получаем имя пользователя из контекста
+    const firstName = user?.first_name ?? null;
+    const lastName = user?.last_name ?? null;
+    const legacyName = user?.name ?? null;
+    
+    const composedName = [firstName, lastName]
+      .filter((value): value is string => !!value && value.trim().length > 0)
+      .join(' ')
+      .trim();
+    
+    const userName = composedName || legacyName || null;
+
     // Сначала выполняем привязку кода
     let bindSuccessful = false;
     let bindError: string | null = null;
     
-    console.log(`🔗 Attempting to bind code: ${code} to userId: ${userId}`);
+    console.log(`🔗 Attempting to bind code: ${code} to userId: ${userId}, userName: ${userName}`);
     
     try {
       const apiBase = process.env.MINIAPP_API_BASE || 'http://localhost:3000';
@@ -282,7 +294,7 @@ bot.on('message_callback', async (ctx) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ code, userId }),
+        body: JSON.stringify({ code, userId, userName }),
       });
 
       console.log(`📡 Bind API response status: ${bindResponse.status}`);
