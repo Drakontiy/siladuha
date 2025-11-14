@@ -1,5 +1,5 @@
 import { bot } from '../bot';
-import { StoredFriend } from '../storage/userStateStore';
+import { StoredFriend, StoredFriendRequest } from '../storage/userStateStore';
 
 /**
  * Преобразует строковый user_id в числовой формат для MAX Bot API
@@ -108,5 +108,51 @@ export const updateFriendNames = async (
   ]);
 
   return hasUpdates ? updatedFriends : friends;
+};
+
+/**
+ * Обновляет имена в заявках в друзья, получая их через бота
+ * Обновляет только те имена, которые отсутствуют
+ */
+export const updateFriendRequestNames = async (
+  friendRequests: StoredFriendRequest[],
+  updateAll: boolean = false,
+): Promise<StoredFriendRequest[]> => {
+  if (!friendRequests || friendRequests.length === 0) {
+    return friendRequests;
+  }
+
+  const updatedRequests = [...friendRequests];
+  let hasUpdates = false;
+
+  // Обновляем имена в заявках асинхронно, но не ждём все запросы
+  const updatePromises = updatedRequests.map(async (request, index) => {
+    // Обновляем только если имя отсутствует или updateAll = true
+    if (!updateAll && request.counterpartName) {
+      return; // Пропускаем, если имя уже есть
+    }
+
+    try {
+      const userName = await getUserNameFromBot(request.counterpartId);
+      if (userName && userName !== request.counterpartName) {
+        updatedRequests[index] = {
+          ...request,
+          counterpartName: userName,
+        };
+        hasUpdates = true;
+      }
+    } catch (error) {
+      // Игнорируем ошибки при обновлении отдельного имени
+      console.debug(`⚠️ Failed to update name for friend request ${request.id}:`, error);
+    }
+  });
+
+  // Ждём обновления всех имён (с таймаутом)
+  await Promise.race([
+    Promise.all(updatePromises),
+    new Promise((resolve) => setTimeout(resolve, 2000)), // Таймаут 2 секунды
+  ]);
+
+  return hasUpdates ? updatedRequests : friendRequests;
 };
 
